@@ -15,6 +15,9 @@ jQuery(function(){
       jQuery.post(this.href, function(data) {
         jQuery('#volunteer-station-list-item-' + data.id + ' dd div').html(data.html);
         jQuery(element).remove();
+        if(typeof data.action !== undefined && data.action === "remove"){
+          jQuery('#volunteer-station-list-item-' + data.id + ' dd a.add').show();
+        }
         jQuery('#loading-gif').remove();
       });
     }
@@ -45,6 +48,10 @@ jQuery(function(){
         jQuery('#volunteer-station-list-item-' + data.id + ' dd a.remove').remove();
         jQuery('#volunteer-station-list-item-' + data.id + ' dd').append('<a href="/node/' + data.nid + '/edit?destination=' + valhalla_destination_path +'" class="edit">Ret</a>');
         jQuery('#volunteer-station-list-item-' + data.id + ' dd').append('<a href="/ajax/volunteers/station/remove/' + data.nid + '/' + data.id + '" class="remove">X</a>');
+
+        if(typeof data.action !== undefined && data.action === "add"){
+          jQuery('#volunteer-station-list-item-' + data.id + ' dd a.add').hide();
+        }
       }
       jQuery('#loading-gif').remove();
     }, "json");
@@ -66,9 +73,9 @@ jQuery(function(){
   });
 
   jQuery('.volunteer').hover(function(){
-    jQuery(this).find('.rsvp-message').show();
-  },
-  function(){
-    jQuery(this).find('.rsvp-message').hide();
+      jQuery(this).find('.rsvp-message').show();
+    },
+    function(){
+      jQuery(this).find('.rsvp-message').hide();
   });
 });

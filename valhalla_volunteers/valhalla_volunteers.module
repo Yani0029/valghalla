@@ -365,6 +365,7 @@ function valhalla_volunteers_to_polling_station($station_id = NULL) {
     // tth: If the user is administrator and theres no party chosen, show all parties!
     $taxonomy = taxonomy_vocabulary_machine_name_load('partier');
     foreach (taxonomy_get_tree($taxonomy->vid) as $term) {
+      $markup_temp = "";
       if (is_array($restrict_polling_stations) && !in_array($polling_station->nid, $restrict_polling_stations)) {
         continue;
       }
@@ -374,7 +375,6 @@ function valhalla_volunteers_to_polling_station($station_id = NULL) {
         $markup .= '<h2>'.$term->name.'</h2>';
         $markup .= $markup_temp;
       }
-      $markup_temp = "";
 
     }
   }
@@ -443,7 +443,7 @@ function valhalla_volunteers_to_polling_station_roles($polling_station, $user_pa
           $field=field_get_items('field_collection_item',$field_collection_item[$item['value']],$field_name);
 
           if($field&&(int)$field[0]['number_vo']>0){
-            $posts_to_fill = array_merge($posts_to_fill, array_fill(0,$field[0]['number_vo'], strtolower ($title)));
+            $posts_to_fill = array_merge($posts_to_fill, array_fill(0,$field[0]['number_vo'], array('title' => strtolower ($title), 'nid' => $nid)));
           }
         }
       }
@@ -457,32 +457,43 @@ function valhalla_volunteers_to_polling_station_roles($polling_station, $user_pa
   // $station_role_id is the "uniqe" id for the current role from the current party on the
   // current station. This is set during the add volunteer to station routine
   foreach($posts_to_fill as $key => $value){
-    $station_role_id = $user_party_id . $role_array[$value] . $station_id;
-
     $volunteer_query = new EntityFieldQuery();
-    $volunteer_query->fieldCondition('field_polling_station_post', 'value', $station_role_id, 'like')
-      ->entityCondition('bundle', 'volunteers')
-      ->entityCondition('entity_type', 'node')
-      ->propertyCondition('status', 1);
 
+    $volunteer_query->entityCondition('entity_type', 'field_collection_item')
+      ->entityCondition('bundle', 'field_electioninfo')
+      ->fieldCondition('field_election', 'target_id', 2)
+      ->fieldCondition('field_vlnt_station', 'target_id', $station_id)
+      ->fieldCondition('field_post_party', 'target_id', $user_party_id)
+      ->fieldCondition('field_post_role', 'target_id', $value['nid']);
 
-    $volunteers[$value] = reset($volunteer_query->execute());
+    $result = array_shift($volunteer_query->execute());
+
+    if(!empty($result)){
+      foreach($result as $fcid => $fc){
+        $fc = entity_load_single('field_collection_item', $fcid);
+        $nid = $fc->hostEntity()->nid;
+        $volunteers[$value['title']][$nid] = array('nid' => $nid, 'fcid' => $fcid);
+      } 
+    }
   }
+
+  $existing = array();
 
   // tth: Populate "existing"-array with volunteer data
   foreach($posts_to_fill as $key => $value){
     unset($posts_to_fill[$key]);
     $id = NULL;
 
-    $station_role_id = $user_party_id . $role_array[$value] . $station_id;
     // tth: Check if there is a volunteer with the role
-    if(!empty($volunteers[$value])){
-      $id = reset(array_shift($volunteers[$value]));
+    if(!empty($volunteers[$value['title']])){
+      $volunteer = array_shift($volunteers[$value['title']]);
+      $id = $volunteer['nid'];
     }
     if($id){
       $existing[$id] = array(
-          'data' => _valhalla_helper_wrap_name(node_load($id)),
-          'nid' => $id
+          'data' => _valhalla_helper_wrap_name(node_load($id), "p", $volunteer['fcid']),
+          'nid' => $id,
+          'fcid' => $volunteer['fcid'],
         );
     }
     else {
@@ -496,14 +507,14 @@ function valhalla_volunteers_to_polling_station_roles($polling_station, $user_pa
       $value = $value;
     }
 
-    $posts_to_fill[$id] = array('title' => $value, 'party_id' => $user_party_id);
+    $posts_to_fill[$id] = array('nid' => $value['nid'], 'title' => $value['title'], 'party_id' => $user_party_id);
 
     $id = NULL;
   }
 
   return array(
           'posts_to_fill' => $posts_to_fill,
-          'party_id' => $user_party_id,
+          'user_party_id' => $user_party_id,
           'station_id' => $station_id,
           'existing' => $existing,
        );
@@ -559,88 +570,49 @@ function valhalla_volunteers_to_polling_station_ajax($action) {
        * arg(7) = post
        */
 
-      $info = explode('-', arg(7));
-      $post = $info[0];
-      $party_id = $info[1];
-      $station_id = arg(5);
+      $tmp = explode('-', arg(7));
 
-      // tth: Unset all relevant info on old volunteer.
-      $old_ref = arg(6);
-      if ($old_relf) {
-        $old_node = node_load($old_relf);
-        $old_node->field_polling_station = array();
-        $old_node->field_polling_station_post = array();
-        $old_node->field_label = array();
-        $old_node->field_election_mails_send = array();
-
-        $old_node->field_rolle_id=array();
-        $old_node->field_meeting_time=array();
-        node_save($old_node);
-        $old_node = NULL;
-      }
+      $user_nid = arg(4);
+      $post_nid = $tmp[0];
+      $party_tid = $tmp[1];
+      $station_nid = arg(5);
 
       // tth: this is a bad idea.
       $role = strtoupper($post);
 
-      // tth: Get the nid of the role
-      $role_id = db_select('node', 'n')
-            ->fields('n', array('nid'))
-            ->condition('n.type', 'roles')
-            ->condition('n.title', $role)
-            ->execute()
-            ->fetchColumn();
+      // @TODO:
+      // Save info to field collection here!
+      //
+      $fc = entity_create('field_collection_item', array('field_name' => 'field_electioninfo')); 
 
-      // tth: Im not sure why this is nessecary, but it returns the tid for the meeting time,
-      // and thats all i need.
-      $polling_station=node_load($station_id);
-      $volunteers_per_party= field_get_items('node', $polling_station, 'field_volunteers_pr_party_1');
-      foreach ($volunteers_per_party as $item) {
-        $field_collection_item=entity_load('field_collection_item', array($item['value']));
-        $party=field_get_items('field_collection_item', $field_collection_item[$item['value']], 'field_party_list');
-
-        $field_name = 'field_role_n'.$role_id;
-        $role = field_get_items('field_collection_item', $field_collection_item[$item['value']], $field_name);
-        if(isset($role[0]['meeting_time']))
-        $meeting_time =  $role[0]['meeting_time'];
-      }
-
-      if ($node = node_load(arg(4))) {
-        // tth: Well this just keeps getting in the way
-        $station_role_id = $party_id . $role_id . $station_id;
-
-        $node->field_polling_station[$language->language][0]['nid'] = $station_id;
-
-        $node->field_polling_station_post[$language->language][0]['value'] = $station_role_id;
-
-        $node->field_label[$language->language][0]['value'] = $post;
-        $node->field_rolle_id['und'][0]['nid'] = $role_id;
-        $node->field_meeting_time['und'][0]['tid'] = $meeting_time;
-
-        $node->field_rsvp = array();
-        $node->field_rsvp_comment = array();
-
-        node_save($node);
-
-        $output->status = TRUE;
-        $output->id = arg(6);
-        $output->nid = $node->nid;
-        $output->html = _valhalla_helper_wrap_name($node);
-      }
+      $node = node_load($user_nid);
+      $fc->setHostEntity('node', $node);
+      $fc->field_election[LANGUAGE_NONE][0]['target_id'] = 2;
+      $fc->field_vlnt_station[LANGUAGE_NONE][0]['target_id'] = $station_nid;
+      $fc->field_post_party[LANGUAGE_NONE][0]['target_id'] = $party_tid;
+      $fc->field_post_role[LANGUAGE_NONE][0]['target_id'] = $post_nid;
+      $fc->save();
+      error_log(print_r($fc, 1));
+      $output->status = TRUE;
+      $output->action = 'add';
+      $output->id = arg(6);
+      $output->nid = $fc->item_id;
+      $output->html = _valhalla_helper_wrap_name($node);
       break;
 
     case 'remove':
       /**
-       * arg(4) = user nid
-       * arg(5) = polling station nid
+       * arg(4) = fcid
+       * arg(5) = temp postid
        */
-      if ($node = node_load(arg(4))) {
-        $node->field_polling_station = array();
-        $node->field_polling_station_post = array();
-        $node->field_election_mails_send = array();
-        $node->field_rolle_id=array();
-        node_save($node);
+      if ($fcid = arg(4)) {
+        // Delete the field collection defining the
+        // volunteers post
+        $fc = entity_load_single('field_collection_item', $fcid);
+        $fc->delete();
 
         $output->status = TRUE;
+        $output->action = 'remove';
         $output->id = arg(5);
         $output->html = t('vælg en anden/ny vagt');
       }

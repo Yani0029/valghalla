@@ -7,7 +7,7 @@
  * @param stdClass $node
  * @return string
  */
-function _valhalla_helper_wrap_name($node, $container = 'p') {
+function _valhalla_helper_wrap_name($node, $container = 'p', $fcid = null) {
   global $language;
 
   $rsvp_map = array(
@@ -25,23 +25,28 @@ function _valhalla_helper_wrap_name($node, $container = 'p') {
 
   $party = taxonomy_term_load($node->field_party[$language->language][0]['tid']);
 
-  $rsvp_markup;
+  $rsvp_markup = "";
 
-  $rsvp_message = field_get_items('node', $node, 'field_rsvp_comment');
+  $fc = entity_load_single('field_collection_item', $fcid);
+  if(is_object($fc)){
+    
+    $rsvp_message = field_get_items('field_collection_item', $fc, 'field_rsvp_comment');
+    $rsvp = field_get_items('field_collection_item', $fc, 'field_rsvp');
+  }
 
   if($rsvp_message){
     if(!empty($rsvp_message[0]['value'])){
-      $rsvp_markup = '<span class="rsvp-message-icon"></span><span style="display:none;" class="rsvp-message">' . $rsvp_message[0]['value'] . '</span>';
+      $rsvp_markup = '<span class="rsvp-message-icon fa fa-envelope-o"></span><span style="display:none;" class="rsvp-message">' . $rsvp_message[0]['value'] . '</span>';
     }
   }
 
-  $rsvp = empty($node->field_rsvp[$language->language][0]['value']) ? 0 : $node->field_rsvp[$language->language][0]['value'];
+  $rsvp = empty($rsvp[0]['value']) ? 0 : $rsvp[0]['value'];
 
   $reply_link = '';
 
   if($rsvp == 0){
     $field_token = field_get_items('node', $node, 'field_token');
-    $reply_link = '<a title="Svar for denne tilforordnede" class="edit reply" href="/volunteers/rsvp/' . $field_token[0]['value'] . '">Svar</a>';
+    $reply_link = '<a title="Svar for denne tilforordnede" class="reply" href="/volunteers/rsvp/'  . $field_token[0]['value'] . '"><i class="fa fa-reply"></i></a>';
   }
 
   $display = '(' . $party->name. ') ' . $node->title . ' (' . $rsvp_map[$rsvp] . ')' . $rsvp_markup . $reply_link ;
