@@ -36,7 +36,7 @@ function valhalla_field_party_volunteers_v3_field_widget_info() {
   $widgets = array();
 
   $widgets['party_volunteers_standard_v3'] = array(
-    'label' => t('Volunteers to Party v3'),
+    'label' => t('Party selection'),
     'field types' => array('party_volunteers_field_v3',    
       '#type' => 'custom_field_type',
       '#title' => t('Party'),

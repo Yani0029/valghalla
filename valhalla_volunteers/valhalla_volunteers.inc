@@ -45,8 +45,8 @@ function _valhalla_helper_wrap_name($node, $container = 'p', $fcid = null) {
   $reply_link = '';
 
   if($rsvp == 0){
-    $field_token = field_get_items('node', $node, 'field_token');
-    $reply_link = '<a title="Svar for denne tilforordnede" class="reply" href="/volunteers/rsvp/'  . $field_token[0]['value'] . '"><i class="fa fa-reply"></i></a>';
+    $field_token = field_get_items('field_collection_item', $fc, 'field_token');
+    $reply_link = '<a title="Svar for denne tilforordnede" class="reply edit" href="/volunteers/rsvp/'  . $field_token[0]['value'] . '"><i class="fa fa-reply"></i></a>';
   }
 
   $display = '(' . $party->name. ') ' . $node->title . ' (' . $rsvp_map[$rsvp] . ')' . $rsvp_markup . $reply_link ;
@@ -61,21 +61,17 @@ function _valhalla_helper_wrap_name($node, $container = 'p', $fcid = null) {
  * @return boolean
  */
 function _valhalla_volunteers_validate_key($token) {
-  $entity_id = db_select('field_data_field_token', 't')
-      ->fields('t', array('entity_id'))
-      ->condition('entity_type', 'node', '=')
-      ->condition('bundle', 'volunteers', '=')
-      ->condition('field_token_value', $token, '=')
-      ->execute()
-      ->fetchField()
-  ;
+  $volunteer_query = new EntityFieldQuery();
+  $volunteer_query->entityCondition('entity_type', 'field_collection_item')
+    ->entityCondition('bundle', 'field_electioninfo')
+    ->fieldCondition('field_token', 'value', $token);
+  $result = $volunteer_query->execute();
 
-  if ($entity_id) {
-    $_SESSION['valhalla_volunteer'] = node_load($entity_id);
-    return TRUE;
-  }
+  $fcid = key(array_shift($result));
+  
+  $fc = entity_load_single('field_collection_item', $fcid);
 
-  return FALSE;
+  return $fc;
 }
 
 /**
@@ -360,6 +356,132 @@ function _valhalla_helper_volunteers_count() {
   }
 }
 
+/**
+ * tth:
+ * Plan is to replace _valhalla_helper_get_volunteer_info_params()
+ */
+function _valhalla_helper_get_token_values($entity){
+  // Get host entity.
+  $host_entity = $entity->hostEntity();
+
+  // Load needed fields.
+  $election_field = field_get_items('field_collection_item', $entity, 'field_election');
+  $polling_station_field = field_get_items('field_collection_item', $entity, 'field_vlnt_station');
+  $post_role_field = field_get_items('field_collection_item', $entity, 'field_post_role');
+
+  // Load needed nodes.
+  $election_node = node_load($election_field[0]['target_id']);
+  $polling_station_node = node_load($polling_station_field[0]['target_id']);
+  $post_node = node_load($post_role_field[0]['target_id']);
+
+  // Init variables empty.
+  $name = '';
+  $email = '';
+  $phone = '';
+  $date_now = '';
+  $election = '';
+  $election_date = '';
+  $link = '';
+  $polling_station = '';
+  $polling_station_address = '';
+  $position = '';
+  $position_description = '';
+  $time = '';
+  $responsible = '';
+ 
+  if(is_object($host_entity)){
+    $email_field = field_get_items('node', $host_entity, 'field_email');
+    $phone_field = field_get_items('node', $host_entity, 'field_phone');
+    
+    $name = $host_entity->title;
+
+    if(!empty($email_field)){
+      $email = $email_field[0]['value'];
+    }
+    
+    if(!empty($phone_field)){
+      $phone = $phone_field[0]['value'];
+    }
+  }
+
+  if(is_object($election_node)){
+    $date_field = field_get_items('node', $election_node, 'field_date');
+    
+    $election = $election_node->title;
+
+    if(!empty($date_field)){
+      $election_date = date(variable_get('valhalla_date_format', 'd-m-Y H:i:s'), strtotime($date_field[0]['value']));
+    }
+  }
+
+  if(is_object($polling_station_node)){
+    $address_road_field = field_get_items('node', $polling_station_node, 'field_address_road');
+    $address_road_no_field = field_get_items('node', $polling_station_node, 'field_address_road_no');
+    $address_floor_field = field_get_items('node', $polling_station_node, 'field_address_floor');
+    $address_door_field = field_get_items('node', $polling_station_node, 'field_address_door');
+    $address_zipcode_field = field_get_items('node', $polling_station_node, 'field_address_zipcode');
+    $address_city_field = field_get_items('node', $polling_station_node, 'field_address_city');
+
+    $polling_station = $polling_station_node->title;
+
+    if(!empty($address_road_field)){
+      $polling_station_address = $address_road_field[0]['value'] . ' ';
+    }
+
+    if(!empty($address_road_no_field)){
+      $polling_station_address .= $address_road_no_field[0]['value'];
+    }
+   
+    if(!empty($address_zipcode_field)){
+      $polling_station_address .= ', ' . $address_zipcode_field[0]['value'] . ' ';
+    }
+    
+    if(!empty($address_floor_field)){
+      $polling_station_address .= $address_floor_field[0]['value'];
+    }
+
+    if(!empty($address_door_field)){
+      $polling_station_address .= ', ' . $address_door_field[0]['value'] . ' ';
+    }
+    
+    if(!empty($address_city_field)){
+      $polling_station_address .= $address_city_field[0]['value'];
+    }
+
+  }
+
+  if(is_object($post_node)){
+    $time_field = field_get_items('node', $post_node, 'field_time');
+    $description_field = field_get_items('node', $post_node, 'field_description');
+      
+    $position = $post_node->title;
+  
+    if(!empty($time_field)){
+      $time = $time_field[0]['value'];
+    }
+
+    if(!empty($description_field)){
+      $position_description = $description_field[0]['value'];
+    }
+  }
+
+  return array(
+    '!name' => $name,
+    '!email' => $email,
+    '!phone' => $phone,
+    '!date_now' => $date_now,
+    '!election' => $election,
+    '!election_date' => $election_date,
+    '!link' => $link,
+    '!polling_station' => $polling_station,
+    '!polling_station_address' => $polling_station_address,
+    '!position' => $position,
+    '!position_description' => $position_description,
+    '!time' => $time,
+    '!responsible' => $responsible,
+  );
+}
+
 function _valhalla_helper_get_volunteer_info_params($node) {
   if ($node === 'info') { // Information HTML
     return <<< EOM
@@ -368,7 +490,7 @@ function _valhalla_helper_get_volunteer_info_params($node) {
 <li><em>!name</em> will be replaced by the recipients name.</li>
 <li><em>!email</em> will be replaced by the recipients email address.</li>
 <li><em>!phone</em> will be replaced by the recipients phone number.</li>
-<li><em>!date</em> will be replaced by date and time the mail is send.</li>
+<li><em>!date_now</em> will be replaced by date and time the mail is send.</li>
 <li><em>!election_date</em> will be replaced by election date.</li>
 <li><em>!link</em> will be replaced by one or more links to various actions.</li>
 <li><em>!polling_station</em> will be replaced by the name of the polling station.</li>

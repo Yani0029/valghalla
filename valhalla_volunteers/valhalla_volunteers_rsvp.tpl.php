@@ -2,6 +2,7 @@
 /**
  * available variables is
  *  $rsvp: the state of the rsvp, if empty this is undesided.
+ *  $rsvp_status: the state of the rsvp, contains descriptive text
  *  $name: name of the volunteer
  *  $phone: the volunteers phone number
  *  $email: the volunteers email adderss
@@ -15,7 +16,7 @@
   <p><?php print t('Her kan du tilkendegive om du ønsker at udfylde den post vi har tiltænkt dig i det kommende valg.') ?></p>
 </div>
 <?php if($rsvp): ?>
-<p> Vi har registreret følgende svar: <?php print $status; ?>.</p>
+<p> Vi har registreret følgende svar: <strong> <?php print $rsvp_status; ?></strong>.</p>
 <?php endif; ?>
 <table>
   <tr>
