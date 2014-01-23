@@ -1,4 +1,17 @@
 <?php
+/**
+ * Valhalla blocks module
+ *
+ * @author Thomas Thune Hansen <tth@bellcom.dk> 
+ *
+ * This module is responsible for the overview/status blocks.
+ *  - These blocks are fetched asynchronously. The 2 Drupal
+ *    blocks just insert a placeholder to be filled out, and
+ *    instansiate rendering of the markup.
+ * As well as the change election and change party blocks.
+ *  - These 2, do not rely on the frontpage, and can be used
+ *    wherever.
+ */
 
 /**
  * hook_block_info implementation
@@ -56,16 +69,23 @@ function valhalla_blocks_block_view($delta = '') {
 
       $markup = '';
 
-      foreach($parties as $party_tid => $party_taxonomy){
-        $markup .= '<a href="/valhalla/change/party/' . $party_tid .'">' . $party_taxonomy->name . '</a>, ';
+      if (user_access('administer valhalla')) {
+        $markup = 'Parti: ';
+        foreach ($parties as $party_tid => $party_taxonomy){
+          $markup .= '<a href="/valhalla/change/party/' . $party_tid .'">' . $party_taxonomy->name . '</a>, ';
+        }
+        $markup .= '<a href="/valhalla/change/party/0">' . 'Alle' . '</a>';
       }
+
       return array("content" => $markup);
       break;
+
     // Election switcher is just a normal block with a form.
     case 'election_switcher':
       $election_form = drupal_get_form('valhalla_change_election_form');
       return array("content" => drupal_render($election_form));
       break;
+
     // The other blocks are fetched with AJAX. this is just simple markup to
     // fill.
     default:
@@ -84,7 +104,7 @@ function valhalla_change_election_form(){
   
   $election_options[0] = t('- Vælg -');
 
-  foreach($elections as $node){
+  foreach ($elections as $node) {
     $election_options[$node->nid] = $node->title;
   }
 
@@ -123,15 +143,26 @@ function valhalla_change_election_form_submit(&$form, $form_state){
  * AJAX block view
  *
  * Renders markup for the AJAX'ed blocks.
- * @author Thomas Thune Hansen <tth@bellcom.dk> 
  */
 function valhalla_block_ajax_view($delta = '') {
   $markup = '';
+  global $user;
+
+  $user_entity = user_load($user->uid);
+  $user_party_id = empty($user_entity->field_party[LANGUAGE_NONE][0]['tid']) ? FALSE : $user_entity->field_party[LANGUAGE_NONE][0]['tid'];
+  
+  // Get polling stations user is allowed to see
+  $restrict_polling_stations = array();
+  if (!empty ($user_entity->field_polling_station[LANGUAGE_NONE])) {
+    foreach ($user_entity->field_polling_station[LANGUAGE_NONE] as $station) {
+      $restrict_polling_stations[] = $station['nid'];
+    }
+  }
 
   // Users selected election is in $_SESSION['election_nid'].
   $election_node = node_load($_SESSION['election_nid']);
 
-  if(!is_object($election_node)){
+  if (!is_object($election_node)) {
     print 'Der er ikke valgt noget valg';
     return;
   }
@@ -140,26 +171,14 @@ function valhalla_block_ajax_view($delta = '') {
   // election.
   $polling_stations_field = field_get_items('node', $election_node, 'field_polling_stations');
 
-  foreach ($polling_stations_field as $data){
+  foreach ($polling_stations_field as $data) {
     $polling_station_nids[$data['target_id']] = $data['target_id'];
   }
 
-  // We need to know what polling stations are active in this
-  // election.
-  $polling_stations_field = field_get_items('node', $election_node, 'field_polling_stations');
-
-  foreach ($polling_stations_field as $data){
-    $polling_station_nids[$data['target_id']] = $data['target_id'];
-  }
-
-  if(empty($polling_station_nids)){
+  if (empty($polling_station_nids)) {
     print 'Der er ingen valsteder på dette valg' ;
     return;
   }
-
-  // @TODO
-  // Implement further restriction on polling stations
-  // Implement party restriction
 
   // We also need the roles.
   $roles = _valhalla_helper_get_roles();
@@ -169,7 +188,10 @@ function valhalla_block_ajax_view($delta = '') {
     // Party status (Overall)
     //
     case 'party_status':
-      $count = _valhalla_blocks_get_count($_SESSION['election_nid'], $polling_station_nids, $roles, $user_party_id = NULL);
+      $count = _valhalla_blocks_get_count($_SESSION['election_nid'],
+                                          $polling_station_nids,
+                                          $roles,
+                                          $user_party_id);
       $markup = _valhalla_blocks_generate_overview_markup($count);
 
       break;
@@ -182,12 +204,23 @@ function valhalla_block_ajax_view($delta = '') {
       // We need info on the polling station nodes (constituency)
       // So we just load them all.
       foreach (node_load_multiple($polling_station_nids) as $polling_station) { 
+        // If the array of restricting stations is not empty we only let the user see the
+        // polling stations in this array
+        if(!empty($restrict_polling_stations) && 
+           !in_array($polling_station->nid, $restrict_polling_stations)) {
+          continue;
+        }
+
         $polling_station_nid = $polling_station->nid;
 
         $constituency_field = field_get_items('node', $polling_station, 'field_constituency');
         $constituency_nids[$constituency_field[0]['nid']][$polling_station_nid] = $polling_station_nid;
 
-        $polling_station_count[$polling_station_nid] = _valhalla_blocks_get_count($_SESSION['election_nid'], array($polling_station_nid), $roles, $user_party_id = NULL);
+        $polling_station_count[$polling_station_nid] = _valhalla_blocks_get_count(
+                                                                          $_SESSION['election_nid'],
+                                                                          array($polling_station_nid),
+                                                                          $roles,
+                                                                          $user_party_id);
       }
       $markup = _valhalla_blocks_generate_constituency_markup($constituency_nids, $polling_station_count);
 
@@ -212,7 +245,7 @@ function _valhalla_blocks_get_count($election_nid, $polling_station_nids, $roles
       'rsvp_no' => 0, 
     );
 
-  foreach($roles as $role_nid => $role_title){
+  foreach ($roles as $role_nid => $role_title) {
     //
     // Total assinged roles
     //
@@ -228,7 +261,7 @@ function _valhalla_blocks_get_count($election_nid, $polling_station_nids, $roles
     $query->condition('vpp.entity_id', $polling_station_nids, 'IN');
     $res = $query->execute()->fetchColumn();
 
-    $role_count[$role_nid]['assigned'] = $res;
+    $role_count[$role_nid]['assigned'] = is_numeric($res) ? $res : 0;
     $total_count['assigned'] += $role_count[$role_nid]['assigned'];
 
     //
@@ -242,6 +275,10 @@ function _valhalla_blocks_get_count($election_nid, $polling_station_nids, $roles
       ->fieldCondition('field_vlnt_station', 'target_id', $polling_station_nids)
       ->fieldCondition('field_post_role', 'target_id', $role_nid);
 
+    if ($user_party_id) {
+      $volunteer_query->fieldCondition('field_post_party', 'target_id', $user_party_id);
+    }
+  
     $result = array_shift($volunteer_query->execute());
 
     $role_count[$role_nid]['total'] = count($result);
@@ -259,6 +296,10 @@ function _valhalla_blocks_get_count($election_nid, $polling_station_nids, $roles
       ->fieldCondition('field_post_role', 'target_id', $role_nid)
       // RVSP 1 corresponds to ok
       ->fieldCondition('field_rsvp', 'value', 1);
+
+    if ($user_party_id) {
+      $volunteer_query->fieldCondition('field_post_party', 'target_id', $user_party_id);
+    }
 
     $result = array_shift($volunteer_query->execute());
 
@@ -278,11 +319,16 @@ function _valhalla_blocks_get_count($election_nid, $polling_station_nids, $roles
       // RVSP 2,3 is no
       ->fieldCondition('field_rsvp', 'value', array(2, 3));
 
+    if ($user_party_id) {
+      $volunteer_query->fieldCondition('field_post_party', 'target_id', $user_party_id);
+    }
+
     $result = array_shift($volunteer_query->execute());
     
     $role_count[$role_nid]['rsvp_no'] = count($result);
     $total_count['rsvp_no'] += $role_count[$role_nid]['rsvp_no'];
   }
+
   return $count = array('total_count' => $total_count, 'role_count' => $role_count);
 }
 
@@ -297,25 +343,21 @@ function _valhalla_blocks_generate_overview_markup($count){
             <td></td>
             <td>Mangler</td>
           </tr>
-
           <tr>
             <td><div class="partistatusenhed">Status total</div></td>
             <td><div class="partistatusenhedvaerdi">' . $count['total_count']['total'] . '/' . $count['total_count']['assigned'] . '</div> </td>
             <td> <div class="partistatusenhedvaerdi">' . ($count['total_count']['assigned'] - $count['total_count']['total']) . '</div> </td>
           </tr>
-
           <tr>
             <td>Bekræftede</td>
             <td><div class="partistatusenhedvaerdi">' . $count['total_count']['rsvp_ok']. '</div> </td>
             <td></td>
           </tr>
-
           <tr>
             <td>Afviste</td>
             <td><div class="partistatusenhedvaerdi">' . $count['total_count']['rsvp_no']. '</div> </td>
             <td></td>
           </tr>
-
           <tr>
             <td>Afventer svar</td>
             <td><div class="partistatusenhedvaerdi">' .( $count['total_count']['total'] - ($count['total_count']['rsvp_ok'] + $count['total_count']['rsvp_no'] )). '</div> </td>
@@ -333,16 +375,18 @@ function _valhalla_blocks_generate_overview_markup($count){
 
   $roles = _valhalla_helper_get_roles();
 
-  foreach($count['role_count'] as $role_nid => $role_count){
+  foreach ($count['role_count'] as $role_nid => $role_count) {
     $no = '';
-    if($role_count['rsvp_no']){
+    if($role_count['rsvp_no']) {
       $no = 'volunteer-status-cancelled';
     }
     $markup .= '
         <tr>
           <td><div class="partistatusenhed">'. $roles[$role_nid].'</div></td>
-          <td><div class="partistatusenhedvaerdi '. $no .'">'. $role_count['total']. '/' . $role_count['assigned'] . '</div> </td>
-          <td><div class="partistatusenhedvaerdi">' . ($role_count['assigned'] - $role_count['total']) . '</div> </td>
+          <td><div class="partistatusenhedvaerdi '. $no .'">'. $role_count['total']
+          . '/' . $role_count['assigned'] . '</div> </td>
+          <td><div class="partistatusenhedvaerdi">' . 
+          ($role_count['assigned'] - $role_count['total']) . '</div> </td>
         </tr>';
   }
   
@@ -357,36 +401,41 @@ function _valhalla_blocks_generate_overview_markup($count){
 function _valhalla_blocks_generate_constituency_markup($constituency_nids, $polling_station_count){
   $roles = _valhalla_helper_get_roles();
 
-  foreach($constituency_nids as $constituency_nid => $polling_station_nids){
+  foreach ($constituency_nids as $constituency_nid => $polling_station_nids) {
     $constituency_node = node_load($constituency_nid);
 
     $markup = '<table><thead><tr><th>' . $constituency_node->title . '</th>';
-    foreach($roles as $role_nid => $role_title) {
+    foreach ($roles as $role_nid => $role_title) {
       $markup .= '<th>' . $role_title . '</th>';
     }
 
     $markup .= '<th>I alt</th>';
     $markup .= '</tr></thead>'; 
-    $markup .= _valhalla_blocks_generate_polling_station_markup($polling_station_nids, $polling_station_count);
+    $markup .= _valhalla_blocks_generate_polling_station_markup($polling_station_nids,
+                                                                $polling_station_count);
    
     // Count constituency totals
-    foreach($polling_station_count as $data){
-      error_log(print_r($data, 1));
+    foreach ($polling_station_count as $data) {
       $constituency_total['total_count']['assigned'] += $data['total_count']['assigned'];
       $constituency_total['total_count']['total'] += $data['total_count']['total'];
 
-      foreach($data['role_count'] as $role_nid =>  $role_count){
+      foreach ($data['role_count'] as $role_nid =>  $role_count) {
         $constituency_total['role_count'][$role_nid]['assigned'] += $role_count['assigned'];
         $constituency_total['role_count'][$role_nid]['total'] += $role_count['total'];
-
       }
     }
 
     $markup .= '<tr><td class="total">I alt</td>';
-    foreach($roles as $role_nid => $role_title){
-      $markup .= '<td class="total">' . $constituency_total['role_count'][$role_nid]['total'] . '/' . $constituency_total['role_count'][$role_nid]['assigned'] . '</td>';
+
+    // Generate bottom totals row
+    foreach ($roles as $role_nid => $role_title) {
+      $markup .= '<td class="total">' . $constituency_total['role_count'][$role_nid]['total'];
+      $markup .= '/' . $constituency_total['role_count'][$role_nid]['assigned'] . '</td>';
     }
-    $markup .= '<td class="total">' . $constituency_total['total_count']['total'] . '/' . $constituency_total['total_count']['assigned'] . '</td>';
+
+    $markup .= '<td class="total">' . $constituency_total['total_count']['total'];
+    $markup .= '/' . $constituency_total['total_count']['assigned'] . '</td>';
+
     $markup .= '</tr>';
 
     $markup .= '</table>';
@@ -401,19 +450,19 @@ function _valhalla_blocks_generate_constituency_markup($constituency_nids, $poll
 function _valhalla_blocks_generate_polling_station_markup($polling_station_nids, $polling_station_count){
   $markup = '';
 
-  foreach($polling_station_nids as $polling_station_nid){
+  foreach ($polling_station_nids as $polling_station_nid) {
     $polling_station_node = node_load($polling_station_nid);
 
     $markup .= '<tr><td><a href="/volunteers/station/' . $polling_station_nid .'">';
     $markup .= $polling_station_node->title . '</a></td>';
 
-    foreach($polling_station_count[$polling_station_nid]['role_count'] as $role_nid => $role_count){
+    foreach ($polling_station_count[$polling_station_nid]['role_count'] as $role_nid => $role_count) {
       $markup .= '<td>'  .    $role_count['total'] . '/'. $role_count['assigned'] . '</td>';
     }
-    $markup .= '<td>'  .  $polling_station_count[$polling_station_nid]['total_count']['total']  . '/'. $polling_station_count[$polling_station_nid]['total_count']['assigned'] . '</td>';
+    $markup .= '<td>'  .  $polling_station_count[$polling_station_nid]['total_count']['total'];
+    $markup .= '/'. $polling_station_count[$polling_station_nid]['total_count']['assigned'] . '</td>';
 
     $markup .= '</tr>';
-
   }
   return $markup;
 }
