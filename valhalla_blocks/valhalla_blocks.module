@@ -17,6 +17,10 @@ function valhalla_blocks_block_info() {
       'info' => t('Skift valg'),
       'cache' => DRUPAL_NO_CACHE
     ),
+    'party_switcher' => array(
+      'info' => t('Skift parti'),
+      'cache' => DRUPAL_NO_CACHE
+    ),
   );
 }
 
@@ -47,9 +51,13 @@ function valhalla_blocks_block_view($delta = '') {
   switch($delta){
     // Change party
     case 'party_switcher':
-      $parties = array();
-      foreach($parties as $party_tid => $party_title){
-        $markup .= '<a href="/valhalla/change/party/' . $party_tid .'">' . $party_title . '</a>';
+      $parties_vocab = taxonomy_vocabulary_machine_name_load('partier');
+      $parties = taxonomy_term_load_multiple(array(), array('vid' => $parties_vocab->vid));
+
+      $markup = '';
+
+      foreach($parties as $party_tid => $party_taxonomy){
+        $markup .= '<a href="/valhalla/change/party/' . $party_tid .'">' . $party_taxonomy->name . '</a>, ';
       }
       return array("content" => $markup);
       break;
