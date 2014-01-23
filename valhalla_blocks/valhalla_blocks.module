@@ -3,6 +3,7 @@
  * Valhalla blocks module
  *
  * @author Thomas Thune Hansen <tth@bellcom.dk> 
+ * @copyright Bellcom Open Source aps.
  *
  * This module is responsible for the overview/status blocks.
  *  - These blocks are fetched asynchronously. The 2 Drupal
