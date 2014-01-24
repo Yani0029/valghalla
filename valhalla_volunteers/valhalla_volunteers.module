@@ -169,7 +169,7 @@ function valhalla_volunteers_rsvp() {
     drupal_set_message(t('Din login token er ikke gyldig.'), 'error');
     drupal_goto('volunteers/login');
   }
-  
+
   $rsvp = 0;
 
   $rsvp_field = field_get_items('field_collection_item', $fc, 'field_rsvp');
@@ -270,7 +270,7 @@ function valhalla_volunteers_rsvp_form($form, &$form_state) {
   global $language;
 
   $fc = _valhalla_volunteers_validate_key(arg(2));
-  
+
   $rsvp_field = field_get_items('field_collection_item', $fc, 'field_rsvp');
   $pollingstation_field = field_get_items('field_collection_item', $fc, 'field_vlnt_station');
 
@@ -316,7 +316,7 @@ function valhalla_volunteers_rsvp_form_submit($form, &$form_state) {
   global $language;
   $types = array('unknown','yes','no','never');
   module_load_include('inc', 'valhalla_volunteers', 'valhalla_volunteers');
- 
+
   $fc = _valhalla_volunteers_validate_key(arg(2));
 
   $fc->field_rsvp[LANGUAGE_NONE][0]['value'] = $form_state['values']['rsvp'];
@@ -360,7 +360,7 @@ function valhalla_volunteers_to_polling_station($station_id = NULL) {
   $user_party_id = empty($user->field_party[LANGUAGE_NONE][0]['tid']) ? FALSE : $user->field_party[LANGUAGE_NONE][0]['tid'];
   $polling_station = node_load($station_id);
   $field_digital_election_list=field_get_items('node', $polling_station, 'field_digital_election_list');
-  
+
   if (isset($field_digital_election_list)&&(int)$field_digital_election_list[0]['value']==1){
     drupal_set_title($polling_station->title.'<div class="icon-digital-valglist">&nbsp;</div>', PASS_THROUGH);
   }
@@ -369,10 +369,10 @@ function valhalla_volunteers_to_polling_station($station_id = NULL) {
   }
 
   $restrict_polling_stations = FALSE;
- 
+
   if (!empty ($user->field_polling_station[LANGUAGE_NONE])) {
     $restrict_polling_stations = array();
-  
+
     foreach ($user->field_polling_station[LANGUAGE_NONE] as $station) {
       $restrict_polling_stations[] = $station['nid'];
     }
@@ -389,7 +389,7 @@ function valhalla_volunteers_to_polling_station($station_id = NULL) {
         continue;
       }
 
-      $markup_temp .= valhalla_volunteers_to_polling_station_markup($polling_station, $term->tid, TRUE); 
+      $markup_temp .= valhalla_volunteers_to_polling_station_markup($polling_station, $term->tid, TRUE);
       if($markup_temp){
         $markup .= '<h2>'.$term->name.'</h2>';
         $markup .= $markup_temp;
@@ -398,7 +398,7 @@ function valhalla_volunteers_to_polling_station($station_id = NULL) {
     }
   }
   else {
-    $markup .= valhalla_volunteers_to_polling_station_markup($polling_station, $user_party_id); 
+    $markup .= valhalla_volunteers_to_polling_station_markup($polling_station, $user_party_id);
   }
   return $markup;
 }
@@ -453,7 +453,7 @@ function valhalla_volunteers_to_polling_station_roles($polling_station, $user_pa
 
   if ($volunteers_pr_party=field_get_items('node',$polling_station, 'field_volunteers_pr_party_1')) {
     foreach ($volunteers_pr_party as $item) {
-      $field_collection_item=entity_load('field_collection_item', array($item['value']));   
+      $field_collection_item=entity_load('field_collection_item', array($item['value']));
       $party_id=field_get_items('field_collection_item',$field_collection_item[$item['value']],'field_party_list');
 
       if($party_id[0]["party_list"]==$user_party_id) {
@@ -492,7 +492,7 @@ function valhalla_volunteers_to_polling_station_roles($polling_station, $user_pa
         $fc = entity_load_single('field_collection_item', $fcid);
         $nid = $fc->hostEntity()->nid;
         $volunteers[$value['title']][$nid] = array('nid' => $nid, 'fcid' => $fcid);
-      } 
+      }
     }
   }
 
@@ -520,7 +520,7 @@ function valhalla_volunteers_to_polling_station_roles($polling_station, $user_pa
       // previously the id was just a running number, which caused the volunteer
       // info to be places in numerous fields on the list, although the volunteer
       // was only added to one post.
-      // The problem only existed when watching multiple parties on the polling 
+      // The problem only existed when watching multiple parties on the polling
       // station. Fix: insert a number that is not repeated.
       $id = rand(1,9) . rand(1,9) . rand(1,9);
       $value = $value;
@@ -552,7 +552,7 @@ function valhalla_volunteers_to_polling_station_ajax($action) {
   module_load_include('inc', 'valhalla_volunteers', 'valhalla_volunteers');
 
   $user = user_load($user->uid);
-  
+
   $user_party_id = empty($user->field_party[LANGUAGE_NONE][0]['tid']) ? FALSE : $user->field_party[LANGUAGE_NONE][0]['tid'];
 
   $output = new stdClass;
@@ -599,10 +599,8 @@ function valhalla_volunteers_to_polling_station_ajax($action) {
       // tth: this is a bad idea.
       $role = strtoupper($post);
 
-      // @TODO:
-      // Save info to field collection here!
-      //
-      $fc = entity_create('field_collection_item', array('field_name' => 'field_electioninfo')); 
+      // Save info to field collection.
+      $fc = entity_create('field_collection_item', array('field_name' => 'field_electioninfo'));
 
       $node = node_load($user_nid);
       $fc->setHostEntity('node', $node);
@@ -610,9 +608,10 @@ function valhalla_volunteers_to_polling_station_ajax($action) {
       $fc->field_vlnt_station[LANGUAGE_NONE][0]['target_id'] = $station_nid;
       $fc->field_post_party[LANGUAGE_NONE][0]['target_id'] = $party_tid;
       $fc->field_post_role[LANGUAGE_NONE][0]['target_id'] = $post_nid;
+      $fc->field_rsvp[LANGUAGE_NONE][0]['value'] = 0;
       $fc->field_token[LANGUAGE_NONE][0]['value'] = user_password(10);
       $fc->save();
-      
+
       $output->status = TRUE;
       $output->action = 'add';
       $output->id = arg(6);

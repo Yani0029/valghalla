@@ -29,7 +29,7 @@ function _valhalla_helper_wrap_name($node, $container = 'p', $fcid = null) {
 
   $fc = entity_load_single('field_collection_item', $fcid);
   if(is_object($fc)){
-    
+
     $rsvp_message = field_get_items('field_collection_item', $fc, 'field_rsvp_comment');
     $rsvp = field_get_items('field_collection_item', $fc, 'field_rsvp');
   }
@@ -68,7 +68,7 @@ function _valhalla_volunteers_validate_key($token) {
   $result = $volunteer_query->execute();
 
   $fcid = key(array_shift($result));
-  
+
   $fc = entity_load_single('field_collection_item', $fcid);
 
   return $fc;
@@ -124,8 +124,7 @@ function _valhalla_helper_get_volunteer_by_cpr($cpr) {
       ->condition('bundle', 'volunteers', '=')
       ->condition('field_cpr_number_value', $cpr, '=')
       ->execute()
-      ->fetchField()
-  ;
+      ->fetchField();
 
   if ($entity_id) {
     return node_load($entity_id);
@@ -315,7 +314,7 @@ function _valhalla_helper_get_polling_stations() {
     $data[$item->nid] = $item->title;
   }
 
-  asort($data, SORT_REGULAR); 
+  asort($data, SORT_REGULAR);
   return $data;
 }
 
@@ -364,17 +363,21 @@ function _valhalla_helper_get_token_values($entity){
   // Get host entity.
   $host_entity = $entity->hostEntity();
 
-  // Load needed fields.
-  $election_field = field_get_items('field_collection_item', $entity, 'field_election');
-  $polling_station_field = field_get_items('field_collection_item', $entity, 'field_vlnt_station');
-  $post_role_field = field_get_items('field_collection_item', $entity, 'field_post_role');
+  // Load needed fields and nodes.
+  if ($field = field_get_items('field_collection_item', $entity, 'field_election')) {
+    $election_node = node_load($field[0]['target_id']);
+  }
 
-  // Load needed nodes.
-  $election_node = node_load($election_field[0]['target_id']);
-  $polling_station_node = node_load($polling_station_field[0]['target_id']);
-  $post_node = node_load($post_role_field[0]['target_id']);
+  if ($field = field_get_items('field_collection_item', $entity, 'field_vlnt_station')) {
+    $polling_station_node = node_load($field[0]['target_id']);
+  }
 
-  // Init variables empty.
+  if ($field = field_get_items('field_collection_item', $entity, 'field_post_role')) {
+    $post_node = node_load($field [0]['target_id']);
+  }
+
+  // Empty variables.
+  $volunteer_nid = '';
   $name = '';
   $email = '';
   $phone = '';
@@ -388,84 +391,77 @@ function _valhalla_helper_get_token_values($entity){
   $position_description = '';
   $time = '';
   $responsible = '';
- 
+
+  $date_now = date(variable_get('valhalla_datetime_format', 'd-m-Y H:i:s'));
+
   if(is_object($host_entity)){
-    $email_field = field_get_items('node', $host_entity, 'field_email');
-    $phone_field = field_get_items('node', $host_entity, 'field_phone');
-    
+    $volunteer_nid = $host_entity->nid;
+
     $name = $host_entity->title;
 
-    if(!empty($email_field)){
-      $email = $email_field[0]['value'];
+    if ($email_field = field_get_items('node', $host_entity, 'field_email')) {
+      $email = $email_field[0]['email'];
     }
-    
-    if(!empty($phone_field)){
+
+    if ($phone_field = field_get_items('node', $host_entity, 'field_phone')) {
       $phone = $phone_field[0]['value'];
     }
   }
 
   if(is_object($election_node)){
-    $date_field = field_get_items('node', $election_node, 'field_date');
-    
     $election = $election_node->title;
 
-    if(!empty($date_field)){
-      $election_date = date(variable_get('valhalla_date_format', 'd-m-Y H:i:s'), strtotime($date_field[0]['value']));
+    if ($field= field_get_items('node', $election_node, 'field_date')) {
+      $election_date = date(variable_get('valhalla_date_format', 'd-m-Y'), strtotime($field[0]['value']));
     }
   }
 
   if(is_object($polling_station_node)){
-    $address_road_field = field_get_items('node', $polling_station_node, 'field_address_road');
-    $address_road_no_field = field_get_items('node', $polling_station_node, 'field_address_road_no');
-    $address_floor_field = field_get_items('node', $polling_station_node, 'field_address_floor');
-    $address_door_field = field_get_items('node', $polling_station_node, 'field_address_door');
-    $address_zipcode_field = field_get_items('node', $polling_station_node, 'field_address_zipcode');
-    $address_city_field = field_get_items('node', $polling_station_node, 'field_address_city');
-
     $polling_station = $polling_station_node->title;
 
-    if(!empty($address_road_field)){
-      $polling_station_address = $address_road_field[0]['value'] . ' ';
+    if ($field= field_get_items('node', $polling_station_node, 'field_address_road')) {
+      $polling_station_address = $field[0]['value'] . ' ';
     }
 
-    if(!empty($address_road_no_field)){
-      $polling_station_address .= $address_road_no_field[0]['value'];
-    }
-   
-    if(!empty($address_zipcode_field)){
-      $polling_station_address .= ', ' . $address_zipcode_field[0]['value'] . ' ';
-    }
-    
-    if(!empty($address_floor_field)){
-      $polling_station_address .= $address_floor_field[0]['value'];
+    if ($field = field_get_items('node', $polling_station_node, 'field_address_road_no')) {
+      $polling_station_address .= $field[0]['value'];
     }
 
-    if(!empty($address_door_field)){
-      $polling_station_address .= ', ' . $address_door_field[0]['value'] . ' ';
-    }
-    
-    if(!empty($address_city_field)){
-      $polling_station_address .= $address_city_field[0]['value'];
+    if ($field = field_get_items('node', $polling_station_node, 'field_address_floor')) {
+      $polling_station_address .= $field[0]['value'];
     }
 
+    if ($field = field_get_items('node', $polling_station_node, 'field_address_door')) {
+      $polling_station_address .= ', ' . $field[0]['value'] . ' ';
+    }
+
+    if ($field = field_get_items('node', $polling_station_node, 'field_address_zipcode')) {
+      $polling_station_address .= ",\n" . $field[0]['value'] . ' ';
+    }
+
+    if ($field = field_get_items('node', $polling_station_node, 'field_address_city')) {
+      $polling_station_address .= $field[0]['value'];
+    }
+
+    if ($field = field_get_items('node', $polling_station_node, 'field_contact')) {
+      $responsible = $field[0]['value'];
+    }
   }
 
   if(is_object($post_node)){
-    $time_field = field_get_items('node', $post_node, 'field_time');
-    $description_field = field_get_items('node', $post_node, 'field_description');
-      
     $position = $post_node->title;
-  
-    if(!empty($time_field)){
-      $time = $time_field[0]['value'];
+
+    if ($field = field_get_items('node', $post_node, 'field_time')) {
+      $time = $field[0]['value'];
     }
 
-    if(!empty($description_field)){
-      $position_description = $description_field[0]['value'];
+    if ($field = field_get_items('node', $post_node, 'field_description')) {
+      $position_description = $field[0]['value'];
     }
   }
 
   return array(
+    'nid' => $volunteer_nid,
     '!name' => $name,
     '!email' => $email,
     '!phone' => $phone,
@@ -475,10 +471,10 @@ function _valhalla_helper_get_token_values($entity){
     '!link' => $link,
     '!polling_station' => $polling_station,
     '!polling_station_address' => $polling_station_address,
+    '!polling_station_contact' => $responsible,
     '!position' => $position,
     '!position_description' => $position_description,
     '!time' => $time,
-    '!responsible' => $responsible,
   );
 }
 
@@ -496,13 +492,14 @@ function _valhalla_helper_get_volunteer_info_params($node) {
 <li><em>!polling_station</em> will be replaced by the name of the polling station.</li>
 <li><em>!polling_station_address</em> will be replaced by the address of the polling station</li>
 <li><em>!position</em> will be replaced by the VAF/VA/TI label</li>
-<li><em>!time</em> will be replaced by meeting time for position</li>      
-<li><em>!responsible</em> will be replaced by the name of responsible for a given polling station.</li>
+<li><em>!position_description</em> will be replaced by the position description</li>
+<li><em>!time</em> will be replaced by meeting time for position</li>
+<li><em>!polling_station_contact</em> will be replaced by the name of responsible for a given polling station.</li>
 </ul>
 <p>Please note that in some cases the options above is not available.</p>
 EOM;
   }
-  
+
   $params = drupal_static(__FUNCTION__ . $node->nid, FALSE);
 
   if (empty($params)) {

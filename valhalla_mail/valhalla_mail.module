@@ -30,22 +30,31 @@ function valhalla_mail_menu() {
       'type' => MENU_LOCAL_TASK,
       'weight' => -5,
   );
+  $items['valhalla_mail/ajax/view'] = array(
+    'page callback' => 'valhalla_mail_ajax_view',
+    'access arguments' => array('administer valhalla'),
+  );
+
   return $items;
 }
 
 /**
+ * implements hook_init()
+ */
+function valhalla_mail_init(){
+  if (arg(0) == 'admin' && arg(1) == 'valhalla' && arg(2) == 'sendmail') {
+    drupal_add_js(drupal_get_path('module', 'valhalla_mail') . '/js/valhalla_mail.js', 'file');
+  }
+}
+/**
  * Handles valhalla templated mail sendout.
- * 
+ *
  * @param type $key
  * @param type $message
- * @param type $params 
+ * @param type $params
  */
 function valhalla_mail_mail($key, &$message, $params) {
-
-  $options = array(
-      'langcode' => $message['language']->language,
-  );
-
+  $options = array();
   switch ($key) {
     case 'rsvp_reminder':
       $email = &drupal_static(__FUNCTION__ . 'rsvp_reminder', FALSE);
@@ -96,12 +105,23 @@ function valhalla_mail_mail($key, &$message, $params) {
  */
 function valhalla_mail_sendmail_form($form, $form_state) {
   if (isset($form_state['storage']['confirm'])) {
-     // ALSO do $form definition here. Your final submit handler (after user clicks Yes, I Confirm) will 
+    $recipients = '';
+    foreach($form_state['storage']['volunteer_params'] as $fc_id => $params){
+      $recipients .= '<a href="#" class="js-show-volunteer-mail" id="' . $fc_id . '">' . $params['!name'] . '</a><br />';
+    }
+
+    $form['recipients'] = array(
+      '#type' => 'item',
+      '#weight' => 50,
+      '#markup' => $recipients,
+    );
+
+    // ALSO do $form definition here. Your final submit handler (after user clicks Yes, I Confirm) will
     // only see $form_state info defined here. Form you create here passed as param1 to confirm_form
     return confirm_form($form,
-      t('Er du sikker på du vil udsende mail til @count modtagere ?', array('@count' => $form_state['storage']['count'])), 
+      t('Er du sikker på du vil udsende mail til @count modtagere ?', array('@count' => $form_state['storage']['count'])),
       'admin/valhalla',
-      'Mailens indhold:<br/><h3>' . $form_state['values']['subject'] . '</h3><pre>' . $form_state['values']['body'] . '</pre>', 
+      'Mailens indhold:<br/><h3>' . $form_state['values']['subject'] . '</h3><div class="js-volunteer-mail">' . nl2br($form_state['values']['body']) . '</div>',
       'Send!',
       'Afbryd'
     ); //Had better luck leaving off last param 'name'
@@ -117,25 +137,25 @@ function valhalla_mail_sendmail_form($form, $form_state) {
     $parties[$term->tid] = $term->name;
   }
 
+  // Elections
+  $elections = db_select('node', 'n')
+          ->fields('n', array('nid', 'title'))
+          ->condition('type', 'election')
+          ->execute()->fetchAllKeyed();
+
+
+  // Polling stations
   $ps = db_select('node', 'n')
           ->fields('n', array('nid', 'title'))
           ->condition('type', 'polling_station')
           ->execute()->fetchAllKeyed();
 
-  // tth: field_label no longer holds a node id but now the title
-  // of the role in lowercase
-  $roles=array();
-  $res = db_select('node', 'n')
+  // Roles
+  $roles= db_select('node', 'n')
           ->distinct()
-          ->fields('n', array('nid', 'title'))   
-            ->condition('n.type', 'roles')
-          ->execute();
-
-  // tth: populate roles array
-  while($rec=$res->fetchAssoc()){
-    $rid = strtolower($rec['title']);
-    $roles[$rid]= $rec['title'];
-  }
+          ->fields('n', array('nid', 'title'))
+          ->condition('n.type', 'roles')
+          ->execute()->fetchAllKeyed();
 
   $form['content'] = array(
       '#type' => 'fieldset',
@@ -158,6 +178,15 @@ function valhalla_mail_sendmail_form($form, $form_state) {
       '#title' => 'Modtagere',
       '#description' => t('Hold CTRL nede for at vælge flere. Ingen valgte vil sende til alle.'),
   );
+  $form['recipents']['election'] = array(
+      '#type' => 'select',
+      '#title' => 'Valg',
+      '#multiple' => true,
+      '#options' => $elections,
+      '#size' => 5,
+      '#prefix' => '<div style="float:left;margin-right:2em">',
+      '#suffix' => '</div>'
+  );
   $form['recipents']['rsvp_status'] = array(
       '#type' => 'select',
       '#title' => 'RSVP Status',
@@ -172,7 +201,7 @@ function valhalla_mail_sendmail_form($form, $form_state) {
       '#prefix' => '<div style="float:left;margin-right:2em">',
       '#suffix' => '</div>'
   );
-  $form['recipents']['volunteer_type'] = array(
+  $form['recipents']['roles'] = array(
       '#type' => 'select',
       '#title' => 'Frivillig type',
       '#multiple' => true,
@@ -207,83 +236,118 @@ function valhalla_mail_sendmail_form($form, $form_state) {
   return $form;
 }
 
+/**
+ * Submit handler for mail form.
+ */
 function valhalla_mail_sendmail_form_submit($form, &$form_state) {
   global $language;
 
   module_load_include('inc', 'valhalla_volunteers');
 
-  $volunteers_nids = $form_state['storage']['nids'];
+  if (!isset($form_state['storage'])) {
+    $volunteer_query = new EntityFieldQuery();
+    $volunteer_query->entityCondition('entity_type', 'field_collection_item')
+        ->entityCondition('bundle', 'field_electioninfo');
 
-  if (empty($volunteers_nids) or !isset($volunteers_nids) ) {
+    $election = count($form_state['values']['election']) > 0 ? $form_state['values']['election'] : false;
     $rsvp_status = count($form_state['values']['rsvp_status']) > 0 ? $form_state['values']['rsvp_status'] : false;
-    $volunteer_type = count($form_state['values']['volunteer_type']) > 0 ? $form_state['values']['volunteer_type'] : false;
+    $roles = count($form_state['values']['roles']) > 0 ? $form_state['values']['roles'] : false;
     $party = count($form_state['values']['party']) > 0 ? $form_state['values']['party'] : false;
     $polling_station = count($form_state['values']['polling_station']) > 0 ? $form_state['values']['polling_station'] : false;
 
-    // Prepare statement.
-    $query = db_select('node', 'n');
-    $query->fields('n', array('nid'));
-    $query->condition('type', 'volunteers');
-
-    if ($rsvp_status) {
-      $query->leftjoin('field_data_field_rsvp', 'r', 'n.nid = r.entity_id');
-      $sql = '{field_rsvp_value} IN (' . implode(',', $rsvp_status) . ')';
-      if (in_array('0', $rsvp_status)) {
-        $sql .= ' OR {field_rsvp_value} IS NULL';
-      }
-      $query->where($sql);
+    if ($election) {
+      $volunteer_query->fieldCondition('field_election', 'target_id', $election);
     }
-    if ($volunteer_type) {
-      $query->join('field_data_field_label', 'v', 'n.nid = v.entity_id');
-      $query->condition('field_label_value', $volunteer_type);
+    if ($rsvp_status) {
+      $volunteer_query->fieldCondition('field_rsvp', 'value', $rsvp_status);
+    }
+    if ($roles) {
+      $volunteer_query->fieldCondition('field_post_role', 'target_id', $roles);
     }
     if ($party) {
-      $query->join('field_data_field_party', 'p', 'n.nid = p.entity_id');
-      $query->condition('field_party_tid', $party);
+      $volunteer_query->fieldCondition('field_post_party', 'target_id', $party);
     }
-
     if ($polling_station) {
-      $query->join('field_data_field_polling_station', 'ps', 'n.nid = ps.entity_id');
-      $query->condition('field_polling_station_nid', $polling_station);
+      $volunteer_query->fieldCondition('field_vlnt_station', 'target_id', $polling_station);
     }
 
     // Get the results
-    $volunteers_nids = $query->execute()->fetchAll(PDO::FETCH_COLUMN);
-
+    $result = array_keys(array_shift($volunteer_query->execute()));
+    $form_state['storage']['volunteer_fcids'] = $result;
   }
 
   if (!isset($form_state['storage']['confirm'])) {
     $form_state['storage']['confirm'] = TRUE; // this will cause the form to be rebuilt, entering the confirm part of the form
-    $form_state['storage']['count'] = count($volunteers_nids);
-    $form_state['storage']['nids'] = $volunteers_nids;
+    $form_state['storage']['count'] = count($result);
     $form_state['storage']['body'] = $form_state['values']['body'];
+
+    // We save the body text for use on the confirmaiton page.
+    // Where the user can see the how the mail will look for the
+    // recipients.
+    variable_set('valhalla_mail_temp_store', nl2br($form_state['values']['body']));
+    
     $form_state['storage']['subject'] = $form_state['values']['subject'];
+    $form_state['storage']['volunteer_params'] = valhalla_mail_populate_info($form_state['storage']['volunteer_fcids']);
     $form_state['rebuild'] = TRUE; // along with this
     return;
   }
 
-  // find active election
-  $nid = db_select('field_data_field_election_status', 'es')
-      ->fields('es', array('entity_id'))
-      ->condition('es.bundle', 'election')
-      ->condition('es.field_election_status_value', 1)
-      ->execute()
-      ->fetchColumn()
-  ;
-  // load election node
-  $election = node_load($nid);
+  valhalla_mail_send($form_state['storage']['volunteer_params'], $form_state);
+}
 
+/**
+ * AJAX page callback.
+ *
+ * Prints the message with the tokens replaced. As it would
+ * look in the mail.
+ */
+function valhalla_mail_ajax_view($id) {
+  $volunteer_fc = entity_load_single('field_collection_item', $id);
+
+  $message = variable_get('valhalla_mail_temp_store');
+  $params = _valhalla_helper_get_token_values($volunteer_fc);
+  print t($message, $params);
+}
+
+/**
+ * Get replacement tokens.
+ *
+ * Retrieves the replacement tokens for the supplies fieldcollection
+ * ids.
+ */
+function valhalla_mail_populate_info($fc_ids){
+  $volunteers_params = array();
+  $volunteer_fcs = entity_load('field_collection_item', $fc_ids);
+
+  foreach ($volunteer_fcs as $volunteer_fc){
+    $volunteers_params[$volunteer_fc->item_id] = _valhalla_helper_get_token_values($volunteer_fc);
+  }
+  return $volunteers_params;
+}
+
+/**
+ * Send the mails and tokens to the mailhandler.
+ */
+function valhalla_mail_send($volunteers_params, $form_state){
+  global $language;
   // We got our data, lets start spamming
-  foreach (node_load_multiple($volunteers_nids) as $volunteer_node) {
-    $to = $volunteer_node->field_email[$language->language][0]['email'];
-    $from = variable_get('site_mail', 'admin@example.com');
+  foreach ($volunteers_params as $volunteer_params) {
+    $to = $volunteer_params['!email'];
+    // Check if there is an email address.
+    if ($to) {
+      $from = variable_get('site_mail', 'admin@example.com');
 
-    $params = array(
-        'message' => $form_state['storage']['body'],
-        'subject' => $form_state['storage']['subject'],
-        'replacements' => _valhalla_helper_get_volunteer_info_params($volunteer_node),
-    );
-    drupal_mail('valhalla_mail', 'default', $to, $language, $params, $from, TRUE);
+      $params = array(
+          'message' => $form_state['storage']['body'],
+          'subject' => $form_state['storage']['subject'],
+          'replacements' => $volunteer_params,
+      );
+      drupal_mail('valhalla_mail', 'default', $to, $language, $params, $from, TRUE);
+    }
+    // If there isn't an emailaddress, set a message about it.
+    else {
+      drupal_set_message('Der kunne ikke sendes til: <a href="/node/' . $volunteer_params['nid'] . '">' . $volunteer_params['!name'] . '</a> ingen email addresse fundet');
+    }
   }
   drupal_set_message('Mails udsendt.', 'status');
   drupal_goto('admin/valhalla');

@@ -2,7 +2,7 @@
 /**
  * Valhalla blocks module
  *
- * @author Thomas Thune Hansen <tth@bellcom.dk> 
+ * @author Thomas Thune Hansen <tth@bellcom.dk>
  * @copyright Bellcom Open Source aps.
  *
  * This module is responsible for the overview/status blocks.
@@ -102,7 +102,7 @@ function valhalla_blocks_block_view($delta = '') {
  */
 function valhalla_change_election_form(){
   $elections = node_load_multiple(array(), array('type' => 'election'));
-  
+
   $election_options[0] = t('- Vælg -');
 
   foreach ($elections as $node) {
@@ -151,7 +151,7 @@ function valhalla_block_ajax_view($delta = '') {
 
   $user_entity = user_load($user->uid);
   $user_party_id = empty($user_entity->field_party[LANGUAGE_NONE][0]['tid']) ? FALSE : $user_entity->field_party[LANGUAGE_NONE][0]['tid'];
-  
+
   // Get polling stations user is allowed to see
   $restrict_polling_stations = array();
   if (!empty ($user_entity->field_polling_station[LANGUAGE_NONE])) {
@@ -204,10 +204,10 @@ function valhalla_block_ajax_view($delta = '') {
 
       // We need info on the polling station nodes (constituency)
       // So we just load them all.
-      foreach (node_load_multiple($polling_station_nids) as $polling_station) { 
+      foreach (node_load_multiple($polling_station_nids) as $polling_station) {
         // If the array of restricting stations is not empty we only let the user see the
         // polling stations in this array
-        if(!empty($restrict_polling_stations) && 
+        if(!empty($restrict_polling_stations) &&
            !in_array($polling_station->nid, $restrict_polling_stations)) {
           continue;
         }
@@ -240,10 +240,10 @@ function valhalla_block_ajax_view($delta = '') {
  */
 function _valhalla_blocks_get_count($election_nid, $polling_station_nids, $roles, $user_party_id = NULL){
   $total_count = array(
-      'assigned' => 0, 
-      'total' => 0, 
-      'rsvp_ok' => 0, 
-      'rsvp_no' => 0, 
+      'assigned' => 0,
+      'total' => 0,
+      'rsvp_ok' => 0,
+      'rsvp_no' => 0,
     );
 
   foreach ($roles as $role_nid => $role_title) {
@@ -279,7 +279,7 @@ function _valhalla_blocks_get_count($election_nid, $polling_station_nids, $roles
     if ($user_party_id) {
       $volunteer_query->fieldCondition('field_post_party', 'target_id', $user_party_id);
     }
-  
+
     $result = array_shift($volunteer_query->execute());
 
     $role_count[$role_nid]['total'] = count($result);
@@ -325,7 +325,7 @@ function _valhalla_blocks_get_count($election_nid, $polling_station_nids, $roles
     }
 
     $result = array_shift($volunteer_query->execute());
-    
+
     $role_count[$role_nid]['rsvp_no'] = count($result);
     $total_count['rsvp_no'] += $role_count[$role_nid]['rsvp_no'];
   }
@@ -386,11 +386,11 @@ function _valhalla_blocks_generate_overview_markup($count){
           <td><div class="partistatusenhed">'. $roles[$role_nid].'</div></td>
           <td><div class="partistatusenhedvaerdi '. $no .'">'. $role_count['total']
           . '/' . $role_count['assigned'] . '</div> </td>
-          <td><div class="partistatusenhedvaerdi">' . 
+          <td><div class="partistatusenhedvaerdi">' .
           ($role_count['assigned'] - $role_count['total']) . '</div> </td>
         </tr>';
   }
-  
+
   $markup .= '</table>';
 
   return $markup;
@@ -411,10 +411,10 @@ function _valhalla_blocks_generate_constituency_markup($constituency_nids, $poll
     }
 
     $markup .= '<th>I alt</th>';
-    $markup .= '</tr></thead>'; 
+    $markup .= '</tr></thead>';
     $markup .= _valhalla_blocks_generate_polling_station_markup($polling_station_nids,
                                                                 $polling_station_count);
-   
+
     // Count constituency totals
     foreach ($polling_station_count as $data) {
       $constituency_total['total_count']['assigned'] += $data['total_count']['assigned'];
