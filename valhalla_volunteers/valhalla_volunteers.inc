@@ -295,13 +295,54 @@ function _valhalla_helter_parse_csv_import($file_object, $party_forced = FALSE) 
  * returns a keyed array of roles
  */
 function _valhalla_helper_get_roles() {
-
   $data = array();
   foreach (entity_load('node', FALSE, array('type' => 'roles')) as $item) {
     $data[$item->nid] = $item->title;
   }
 
   return $data;
+}
+
+/**
+ * Get posts to fill on polling station for party.
+ *
+ */
+function _valhalla_helper_get_posts_to_fill($polling_station, $party_tid){
+  $posts_to_fill = array();
+
+  $roles = _valhalla_helper_get_roles();
+
+  // Loop over roles and fetch count for each role on polling station.
+  foreach ($roles as $role_nid => $role_title){
+    $role_count = _valhalla_helper_get_roles_count(array($polling_station->nid), $role_nid, $party_tid); 
+    // Due to the structure that is expected in the recieving end. We need to to this. 
+    while ($role_count) {
+      $posts_to_fill[] = array('title' => $role_title, 'nid' => $role_nid);
+      $role_count--;
+    }
+  }
+
+  return $posts_to_fill;
+}
+
+/**
+ * Get a count of roles on polling station for party.
+ *
+ */
+function _valhalla_helper_get_roles_count($polling_station_nids, $role_nid, $party_tid = NULL){
+  // This query is crazy. I just copied it from the valhalla_blocks module.
+  // But it does what it is supposed to.
+  $query = db_select('field_data_field_role_n'.$role_nid, 'vr');
+  $query->innerJoin('field_data_field_party_list', 'vp', 'vp.entity_id=vr.entity_id ' );
+  $query->innerJoin('field_data_field_volunteers_pr_party_1', 'vpp', 'vpp.field_volunteers_pr_party_1_value=vr.entity_id' );
+  $query->addExpression('SUM(vr.field_role_n'.$role_nid.'_number_vo)');
+  if ($party_tid) {
+    $query->condition('vp.field_party_list_party_list', $party_tid);
+  }
+  $query->condition('vpp.entity_id', $polling_station_nids, 'IN');
+  $res = $query->execute()->fetchColumn();
+
+  return $res;
 }
 
 /**

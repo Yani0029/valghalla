@@ -435,39 +435,13 @@ function valhalla_volunteers_to_polling_station_markup($polling_station, $user_p
  * @return
  *  information array
  */
-function valhalla_volunteers_to_polling_station_roles($polling_station, $user_party_id){
+function valhalla_volunteers_to_polling_station_roles($polling_station, $party_tid){
   global $user, $language;
 
   $station_id = $polling_station->nid;
   $field_digital_election_list=field_get_items('node', $polling_station, 'field_digital_election_list');
-  $posts_to_fill = array();
+  $posts_to_fill = _valhalla_helper_get_posts_to_fill($polling_station, $party_tid);
 
-  $res = db_select('node', 'n')
-    ->fields('n', array('nid', 'title'))
-    ->condition('n.type', 'roles')
-    ->execute();
-
-  while($rec=$res->fetchAssoc()){
-    $nids[$rec['nid']]= $rec['title'];
-  }
-
-  if ($volunteers_pr_party=field_get_items('node',$polling_station, 'field_volunteers_pr_party_1')) {
-    foreach ($volunteers_pr_party as $item) {
-      $field_collection_item=entity_load('field_collection_item', array($item['value']));
-      $party_id=field_get_items('field_collection_item',$field_collection_item[$item['value']],'field_party_list');
-
-      if($party_id[0]["party_list"]==$user_party_id) {
-        foreach($nids as $nid=>$title){
-          $field_name='field_role_n'.$nid;
-          $field=field_get_items('field_collection_item',$field_collection_item[$item['value']],$field_name);
-
-          if($field&&(int)$field[0]['number_vo']>0){
-            $posts_to_fill = array_merge($posts_to_fill, array_fill(0,$field[0]['number_vo'], array('title' => strtolower ($title), 'nid' => $nid)));
-          }
-        }
-      }
-    }
-  }
 
   // tth: Get all roles, query all content from bundle 'roles'
   $role_array = _valhalla_helper_get_role_array();
@@ -482,7 +456,7 @@ function valhalla_volunteers_to_polling_station_roles($polling_station, $user_pa
       ->entityCondition('bundle', 'field_electioninfo')
       ->fieldCondition('field_election', 'target_id', $_SESSION['election_nid'])
       ->fieldCondition('field_vlnt_station', 'target_id', $station_id)
-      ->fieldCondition('field_post_party', 'target_id', $user_party_id)
+      ->fieldCondition('field_post_party', 'target_id', $party_tid)
       ->fieldCondition('field_post_role', 'target_id', $value['nid']);
 
     $result = array_shift($volunteer_query->execute());
@@ -526,17 +500,17 @@ function valhalla_volunteers_to_polling_station_roles($polling_station, $user_pa
       $value = $value;
     }
 
-    $posts_to_fill[$id] = array('nid' => $value['nid'], 'title' => $value['title'], 'party_id' => $user_party_id);
+    $posts_to_fill[$id] = array('nid' => $value['nid'], 'title' => $value['title'], 'party_id' => $party_tid);
 
     $id = NULL;
   }
 
   return array(
           'posts_to_fill' => $posts_to_fill,
-          'user_party_id' => $user_party_id,
+          'user_party_id' => $party_tid,
           'station_id' => $station_id,
           'existing' => $existing,
-       );
+          );
 }
 
 /**
