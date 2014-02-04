@@ -1,0 +1,79 @@
+<?php
+/**
+ * Valhalla eleciton module
+ *
+ * @file
+ *  valhalla_election.module
+ */
+
+/**
+ * implements hook_menu()
+ */
+function valhalla_election_menu(){
+  $items = array();
+
+  $items['valhalla/election/start'] = array(
+    'page callback' => 'valhalla_election_start_election',
+    'access callback' => true,
+  );
+
+  return $items;
+}
+
+/**
+ *
+ */
+function valhalla_election_start_election($election_nid = false){
+  if(!$election_nid){
+    drupal_goto('<front>');
+  }
+  return drupal_get_form('valhalla_election_start_election_form');
+}
+
+/**
+ *
+ */
+function valhalla_election_start_election_form($form, &$form_state){
+  $election_node = node_load(arg(3));
+
+  $election_title = $election_node->title;
+
+  $question = t('Ønsker du at starte valget, !election', array('!election' => $election_title));
+
+  $path = $_SERVER['HTTP_REFERER'];
+
+  $description = t('Dette vil starte valget og udsende inkaldelsesmails.');
+
+  $yes = t('Aktiver');
+
+  $no = t('Annuller');
+
+  return confirm_form($form, $question, $path, $description, $yes, $no);
+}
+
+
+
+/**
+ *
+ */
+function valhalla_election_start_election_form_submit($form, &$form_state){
+  $election_node = node_load(arg(3));
+
+  $election_title = $election_node->title;
+
+  // @TODO
+  //  Load election and set active
+  //  Generate and send invitations
+  $volunteer_query = new EntityFieldQuery();
+  $volunteer_query->entityCondition('entity_type', 'field_collection_item')
+
+  $volunteer_query->fieldCondition('field_election', 'target_id', arg(3));
+
+  $result = array_keys(array_shift($volunteer_query->execute()));
+  $volunteers_params = valhalla_mail_populate_info($result);
+
+  valhalla_mail_send_invitation($volunteers_params);
+
+  drupal_set_message(t('Valget: !election, er startet', array('!election' => $election_title)));
+  drupal_goto('<front>');
+}

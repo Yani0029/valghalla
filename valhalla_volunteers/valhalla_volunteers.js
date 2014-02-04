@@ -46,8 +46,8 @@ jQuery(function(){
       if (data.status) {
         jQuery('#volunteer-station-list-item-' + data.id + ' dd div').html(data.html);
         jQuery('#volunteer-station-list-item-' + data.id + ' dd a.remove').remove();
-        jQuery('#volunteer-station-list-item-' + data.id + ' dd').append('<a href="/node/' + data.nid + '/edit?destination=' + valhalla_destination_path +'" class="edit">Ret</a>');
-        jQuery('#volunteer-station-list-item-' + data.id + ' dd').append('<a href="/ajax/volunteers/station/remove/' + data.nid + '/' + data.id + '" class="remove">X</a>');
+        jQuery('#volunteer-station-list-item-' + data.id + ' dd').append('<a href="/node/' + data.nid + '/edit?destination=' + valhalla_destination_path +'" class="edit btn btn-default btn-xs edit"><span class="glyphicon glyphicon-user"></span></a>');
+        jQuery('#volunteer-station-list-item-' + data.id + ' dd').append('<a href="/ajax/volunteers/station/remove/' + data.nid + '/' + data.id + '" class="remove  btn btn-default btn-xs"><span class="glyphicon glyphicon-minus"></a>');
 
         if(typeof data.action !== undefined && data.action === "add"){
           jQuery('#volunteer-station-list-item-' + data.id + ' dd a.add').hide();

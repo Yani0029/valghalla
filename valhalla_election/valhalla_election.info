@@ -1,0 +1,5 @@
+name = Valhalla Election
+description = Functionality specific to the election
+package = valhalla
+core = 7.x
+

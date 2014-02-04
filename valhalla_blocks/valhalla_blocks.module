@@ -181,7 +181,7 @@ function valhalla_block_ajax_view($delta = '') {
     return;
   }
 
-  // We also need the roles.
+  //We also need the roles.
   $roles = _valhalla_helper_get_roles();
 
   switch ($delta) {
@@ -193,7 +193,7 @@ function valhalla_block_ajax_view($delta = '') {
                                           $polling_station_nids,
                                           $roles,
                                           $user_party_id);
-      $markup = _valhalla_blocks_generate_overview_markup($count);
+      $markup .= _valhalla_blocks_generate_overview_markup($count);
 
       break;
 
@@ -224,7 +224,7 @@ function valhalla_block_ajax_view($delta = '') {
                                                                           $roles,
                                                                           $user_party_id);
       }
-      $markup = _valhalla_blocks_generate_constituency_markup($constituency_nids, $polling_station_count);
+      $markup .= _valhalla_blocks_generate_constituency_markup($constituency_nids, $polling_station_count);
 
       break;
   }
@@ -328,7 +328,7 @@ function _valhalla_blocks_get_count($election_nid, $polling_station_nids, $roles
  */
 function _valhalla_blocks_generate_overview_markup($count){
   $markup = '
-        <table>
+        <table class="table">
           <tr>
             <td></td>
             <td></td>
@@ -357,7 +357,7 @@ function _valhalla_blocks_generate_overview_markup($count){
 
         </table>';
 
-  $markup .= '<table>
+  $markup .= '<table class="table">
               <tr>
                 <td></td>
                 <td></td>
@@ -395,7 +395,7 @@ function _valhalla_blocks_generate_constituency_markup($constituency_nids, $poll
   foreach ($constituency_nids as $constituency_nid => $polling_station_nids) {
     $constituency_node = node_load($constituency_nid);
 
-    $markup = '<table><thead><tr><th>' . $constituency_node->title . '</th>';
+    $markup .= '<table class="table"><thead><tr><th>' . $constituency_node->title . '</th>';
     foreach ($roles as $role_nid => $role_title) {
       $markup .= '<th>' . $role_title . '</th>';
     }
@@ -404,15 +404,18 @@ function _valhalla_blocks_generate_constituency_markup($constituency_nids, $poll
     $markup .= '</tr></thead>';
     $markup .= _valhalla_blocks_generate_polling_station_markup($polling_station_nids,
                                                                 $polling_station_count);
+    $constituency_total = array();
 
     // Count constituency totals
-    foreach ($polling_station_count as $data) {
-      $constituency_total['total_count']['assigned'] += $data['total_count']['assigned'];
-      $constituency_total['total_count']['total'] += $data['total_count']['total'];
+    foreach ($polling_station_count as $polling_station_nid => $data) {
+      if(in_array($polling_station_nid, $polling_station_nids)){
+        $constituency_total['total_count']['assigned'] += $data['total_count']['assigned'];
+        $constituency_total['total_count']['total'] += $data['total_count']['total'];
 
-      foreach ($data['role_count'] as $role_nid =>  $role_count) {
-        $constituency_total['role_count'][$role_nid]['assigned'] += $role_count['assigned'];
-        $constituency_total['role_count'][$role_nid]['total'] += $role_count['total'];
+        foreach ($data['role_count'] as $role_nid =>  $role_count) {
+          $constituency_total['role_count'][$role_nid]['assigned'] += $role_count['assigned'];
+          $constituency_total['role_count'][$role_nid]['total'] += $role_count['total'];
+        }
       }
     }
 
@@ -426,9 +429,7 @@ function _valhalla_blocks_generate_constituency_markup($constituency_nids, $poll
 
     $markup .= '<td class="total">' . $constituency_total['total_count']['total'];
     $markup .= '/' . $constituency_total['total_count']['assigned'] . '</td>';
-
     $markup .= '</tr>';
-
     $markup .= '</table>';
   }
 

@@ -296,7 +296,7 @@ function valhalla_mail_sendmail_form_submit($form, &$form_state) {
 }
 
 /**
- * AJAX page callback.
+ * Mail preview AJAX page callback.
  *
  * Prints the message with the tokens replaced. As it would
  * look in the mail.
@@ -351,4 +351,22 @@ function valhalla_mail_send($volunteers_params, $form_state){
   }
   drupal_set_message('Mails udsendt.', 'status');
   drupal_goto('admin/valhalla');
+}
+
+function valhalla_mail_send_invitation($volunteers_params){
+  global $language; 
+  foreach ($volunteers_params as $volunteer_params) {
+    $to = $volunteer_params['!email'];
+    // Check if there is an email address.
+    if ($to) {
+      $from = variable_get('site_mail', 'admin@example.com');
+
+      $params = array(
+          'message' => $form_state['storage']['body'],
+          'subject' => $form_state['storage']['subject'],
+          'replacements' => $volunteer_params,
+      );
+      drupal_mail('valhalla_mail', 'default', $to, $language, $params, $from, TRUE);
+    }
+  }
 }

@@ -182,7 +182,6 @@ function valhalla_volunteers_rsvp() {
   $polling_station = node_load($pollingstation_field[0]['target_id']);
   // TODO:
   // Figure out an elegant solution to getting the params we need for this page.
-//  $params = _valhalla_helper_get_volunteer_info_params($fc);
   $params = _valhalla_helper_get_token_values($fc);
 
   $form = drupal_get_form('valhalla_volunteers_rsvp_form');
@@ -440,8 +439,7 @@ function valhalla_volunteers_to_polling_station_roles($polling_station, $party_t
 
   $station_id = $polling_station->nid;
   $field_digital_election_list=field_get_items('node', $polling_station, 'field_digital_election_list');
-  $posts_to_fill = _valhalla_helper_get_posts_to_fill($polling_station, $party_tid);
-
+  $assigned_posts = _valhalla_helper_get_posts_to_fill($polling_station, $party_tid);
 
   // tth: Get all roles, query all content from bundle 'roles'
   $role_array = _valhalla_helper_get_role_array();
@@ -449,7 +447,7 @@ function valhalla_volunteers_to_polling_station_roles($polling_station, $party_t
   // tth: Loop through the roles used on the pollingstation, and load the volunteers
   // $station_role_id is the "uniqe" id for the current role from the current party on the
   // current station. This is set during the add volunteer to station routine
-  foreach($posts_to_fill as $key => $value){
+  foreach($assigned_posts as $key => $value){
     $volunteer_query = new EntityFieldQuery();
 
     $volunteer_query->entityCondition('entity_type', 'field_collection_item')
@@ -472,9 +470,10 @@ function valhalla_volunteers_to_polling_station_roles($polling_station, $party_t
 
   $existing = array();
 
+  $posts_to_fill = array();
+
   // tth: Populate "existing"-array with volunteer data
-  foreach($posts_to_fill as $key => $value){
-    unset($posts_to_fill[$key]);
+  foreach($assigned_posts as $key => $value){
     $id = NULL;
 
     // tth: Check if there is a volunteer with the role
@@ -570,6 +569,8 @@ function valhalla_volunteers_to_polling_station_ajax($action) {
       $party_tid = $tmp[1];
       $station_nid = arg(5);
 
+      $polling_station_node = node_load($station_nid);
+
       // tth: this is a bad idea.
       $role = strtoupper($post);
 
@@ -584,6 +585,7 @@ function valhalla_volunteers_to_polling_station_ajax($action) {
       $fc->field_post_role[LANGUAGE_NONE][0]['target_id'] = $post_nid;
       $fc->field_rsvp[LANGUAGE_NONE][0]['value'] = 0;
       $fc->field_token[LANGUAGE_NONE][0]['value'] = user_password(10);
+      $fc->field_ps_date = $polling_station_node->field_ps_date;
       $fc->save();
 
       $output->status = TRUE;
@@ -649,43 +651,6 @@ function valhalla_volunteers_node_update($node) {
       arg(0) . arg(2) !== 'nodeedit'
   ) {
     valhalla_volunteers_send_rsvp($node);
-  }
-
-  if ($node->type == 'election') {
-    if (isset($node->field_election_status[$language->language][0]['value']) &&
-        ($node->field_election_status[$language->language][0]['value'] == 1)
-    ) {
-
-      // only allow one open election at a time.
-      foreach (entity_load('node', FALSE, array('type' => 'election')) as $election) {
-        if ($election->nid == $node->nid) {
-          continue;
-        }
-        $election->field_election_status = array();
-        node_save($election);
-      }
-
-      // send mails to volunteers, but only once.
-      if (empty($node->field_election_mails_send[$language->language][0]['value']) ||
-          ($node->field_election_mails_send[$language->language][0]['value'] == 0)
-      ) {
-        $select = db_select('field_data_field_polling_station_post', 'psp')
-            ->fields('psp', array('entity_id'))
-            ->condition('psp.bundle', 'volunteers');
-        $select->addJoin('INNER', 'field_data_field_polling_station', 'ps', 'psp.entity_id = ps.entity_id');
-        $nids = $select->execute()
-            ->fetchAll(PDO::FETCH_COLUMN);
-
-        if (is_array($nids)) {
-          foreach (node_load_multiple($nids) as $volunteer) {
-            valhalla_volunteers_send_rsvp($volunteer);
-          }
-        }
-
-        $node->field_election_mails_send[$language->language][0]['value'] = 1;
-        node_save($node);
-      }
-    }
   }
 }
 
@@ -825,7 +790,6 @@ function valhalla_volunteers_add_form($form, &$form_state) {
   $form['volunteer']['import']['upload'] = array(
       '#type' => 'file',
   );
-
 
   if (0 && _valhalla_helper_volunteers_count()) {
     $form['volunteer']['export'] = array(
@@ -1237,4 +1201,60 @@ function valhalla_volunteers_form_valhalla_admin_settings_form_alter(&$form, &$f
     '#title' => 'Besked til den frivillige efter svar er afgivet',
     '#default_value' => variable_get('valhalla_rsvp_update_message'),
   );
+}
+
+/**
+ * Implements hook_views_pre_render
+ *
+ * Here we implement a custom filter for the add
+ * volunteer to post view.
+ *
+ * @TODO:
+ *  Much of this can probarbly be done using an SQL
+ *  query, due to the restrictions of field_collection
+ *  item entities and entityfieldquery.
+ */
+function valhalla_volunteers_views_pre_render(&$view){
+  foreach ($view->result as $key => $result) {
+    $polling_station_node = node_load(arg(5));
+    $date_field = field_get_items('node', $polling_station_node, 'field_ps_date');
+
+    $volunteer_query = new EntityFieldQuery();
+
+    // Query if the volunteer has other posts
+    $volunteer_query->entityCondition('entity_type', 'field_collection_item')
+      ->entityCondition('bundle', 'field_electioninfo')
+      ->fieldCondition('field_election', 'target_id', $_SESSION['election_nid']);
+
+    // If the date field is not set, we handle it as if it was the same
+    // as the elections date.
+    if($date_field) {
+      // Query fields with same date.
+      $volunteer_query->fieldCondition('field_ps_date', 'value', $date_field[0]['value']);
+    }
+
+    $result = $volunteer_query->execute();
+
+    // If we have results, the volunteer has a post already.
+    if(!empty($result)){
+      //Stupid oneliner.
+      $volunteer_fcs = entity_load('field_collection_item', array_keys(array_shift($result)));
+      foreach($volunteer_fcs as $volunteer_fc){
+
+        if(!$date_field){
+          $fc_date_field = field_get_items('field_collection_item', $volunteer_fc, 'field_ps_date');
+        }
+
+        //Unset the result.
+        if ( $volunteer_fc->hostEntityId() == $view->result[$key]->nid ) {
+          if(!$date_field && ($fc_date_field == $date_field)){
+            unset( $view->result[$key]);
+          }
+          else {
+            unset( $view->result[$key]);
+          }
+        }
+      }
+    }
+  }
 }
