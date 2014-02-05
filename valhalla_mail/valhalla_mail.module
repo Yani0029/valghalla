@@ -42,9 +42,7 @@ function valhalla_mail_menu() {
  * implements hook_init()
  */
 function valhalla_mail_init(){
-  if (arg(0) == 'admin' && arg(1) == 'valhalla' && arg(2) == 'sendmail') {
-    drupal_add_js(drupal_get_path('module', 'valhalla_mail') . '/js/valhalla_mail.js', 'file');
-  }
+  drupal_add_js(drupal_get_path('module', 'valhalla_mail') . '/js/valhalla_mail.js', 'file');
 }
 /**
  * Handles valhalla templated mail sendout.
@@ -107,7 +105,11 @@ function valhalla_mail_sendmail_form($form, $form_state) {
   if (isset($form_state['storage']['confirm'])) {
     $recipients = '';
     foreach($form_state['storage']['volunteer_params'] as $fc_id => $params){
-      $recipients .= '<a href="#" class="js-show-volunteer-mail" id="' . $fc_id . '">' . $params['!name'] . '</a><br />';
+      $no_email = '';
+      if(!$params['!email']){
+        $no_email = 'no-email-error';
+      }
+      $recipients .= '<a href="#" class="js-show-volunteer-mail ' .$no_email. '" id="' . $fc_id . '">' . $params['!name'] . '</a><br />';
     }
 
     $form['recipients'] = array(
@@ -121,7 +123,7 @@ function valhalla_mail_sendmail_form($form, $form_state) {
     return confirm_form($form,
       t('Er du sikker på du vil udsende mail til @count modtagere ?', array('@count' => $form_state['storage']['count'])),
       'admin/valhalla',
-      'Mailens indhold:<br/><h3>' . $form_state['values']['subject'] . '</h3><div class="js-volunteer-mail">' . nl2br($form_state['values']['body']) . '</div>',
+      'Mailens indhold:<br/><div class="well"><h3>' . $form_state['values']['subject'] . '</h3><div class="js-volunteer-mail well">' . nl2br($form_state['values']['body']) . '</div></div>',
       'Send!',
       'Afbryd'
     ); //Had better luck leaving off last param 'name'
@@ -285,7 +287,7 @@ function valhalla_mail_sendmail_form_submit($form, &$form_state) {
     // Where the user can see the how the mail will look for the
     // recipients.
     variable_set('valhalla_mail_temp_store', nl2br($form_state['values']['body']));
-    
+
     $form_state['storage']['subject'] = $form_state['values']['subject'];
     $form_state['storage']['volunteer_params'] = valhalla_mail_populate_info($form_state['storage']['volunteer_fcids']);
     $form_state['rebuild'] = TRUE; // along with this
@@ -304,7 +306,16 @@ function valhalla_mail_sendmail_form_submit($form, &$form_state) {
 function valhalla_mail_ajax_view($id) {
   $volunteer_fc = entity_load_single('field_collection_item', $id);
 
-  $message = variable_get('valhalla_mail_temp_store');
+  $post_role = field_get_items('field_collection_item', $volunteer_fc, 'field_post_role');
+
+  // If this is for the election start, we need to the the correct
+  // invitation message.
+  if(strstr($_SERVER['HTTP_REFERER'], 'election')){
+    $message = variable_get('valhalla_mail_temp_store-'.$post_role[0]['target_id']);
+  }
+  else {
+    $message = variable_get('valhalla_mail_temp_store');
+  }
   $params = _valhalla_helper_get_token_values($volunteer_fc);
   print t($message, $params);
 }
@@ -353,8 +364,21 @@ function valhalla_mail_send($volunteers_params, $form_state){
   drupal_goto('admin/valhalla');
 }
 
+/**
+ * Send invitations, when election starts
+ */
 function valhalla_mail_send_invitation($volunteers_params){
-  global $language; 
+  global $language;
+
+  $roles = node_load_multiple(array(), array('type' => 'roles'));
+
+  // Build array with message text.
+  foreach ($roles as $role_node){
+    $invitation_mail_field = field_get_items('node', $role_node, 'field_invitation_mail');
+    $role_invitation_mail[$role_node->nid] = $invitation_mail_field[0]['value'];
+  }
+
+  // Loop over volunteers.
   foreach ($volunteers_params as $volunteer_params) {
     $to = $volunteer_params['!email'];
     // Check if there is an email address.
@@ -362,11 +386,14 @@ function valhalla_mail_send_invitation($volunteers_params){
       $from = variable_get('site_mail', 'admin@example.com');
 
       $params = array(
-          'message' => $form_state['storage']['body'],
-          'subject' => $form_state['storage']['subject'],
+          'message' => $role_invitation_mail[$volunteer_params['position_nid']],
+          'subject' => variable_get('valhalla_election_invitation_subject', 'Invitation til deltagelse ved valg'),
           'replacements' => $volunteer_params,
       );
       drupal_mail('valhalla_mail', 'default', $to, $language, $params, $from, TRUE);
+    }
+    else {
+      drupal_set_message('Der kunne ikke sendes til: <a href="/node/' . $volunteer_params['nid'] . '">' . $volunteer_params['!name'] . '</a> ingen email addresse fundet');
     }
   }
 }

@@ -31,46 +31,79 @@ function valhalla_election_start_election($election_nid = false){
 }
 
 /**
+ * Confirm form for starting election.
  *
+ * When starting the election, the user sends out initation
+ * mails. In the confirmation form, we let the user preview
+ * the mails, for each volunteer.
  */
 function valhalla_election_start_election_form($form, &$form_state){
   $election_node = node_load(arg(3));
 
   $election_title = $election_node->title;
 
+  // Confirm form variables.
   $question = t('Ønsker du at starte valget, !election', array('!election' => $election_title));
 
   $path = $_SERVER['HTTP_REFERER'];
 
   $description = t('Dette vil starte valget og udsende inkaldelsesmails.');
+  $description .= '<div class="well"><h3>Invitation til valg</h3><div class="js-volunteer-mail"></div></div>';
 
   $yes = t('Aktiver');
 
   $no = t('Annuller');
 
-  return confirm_form($form, $question, $path, $description, $yes, $no);
-}
+  // Form array. And storage.
+  $form = array();
 
-
-
-/**
- *
- */
-function valhalla_election_start_election_form_submit($form, &$form_state){
-  $election_node = node_load(arg(3));
-
-  $election_title = $election_node->title;
-
-  // @TODO
-  //  Load election and set active
-  //  Generate and send invitations
+  // Get all volunteer params.
   $volunteer_query = new EntityFieldQuery();
-  $volunteer_query->entityCondition('entity_type', 'field_collection_item')
+  $volunteer_query->entityCondition('entity_type', 'field_collection_item');
 
   $volunteer_query->fieldCondition('field_election', 'target_id', arg(3));
 
   $result = array_keys(array_shift($volunteer_query->execute()));
-  $volunteers_params = valhalla_mail_populate_info($result);
+
+  $form_state['storage']['volunteers_params'] = valhalla_mail_populate_info($result);
+
+  // Set the mail body, for usage in preview
+  $roles = node_load_multiple(array(), array('type' => 'roles'));
+
+  foreach ($roles as $role_node){
+    $invitation_mail_field = field_get_items('node', $role_node, 'field_invitation_mail');
+
+    variable_set('valhalla_mail_temp_store-'.$role_node->nid, nl2br($invitation_mail_field[0]['value']));
+  }
+
+  // Build form element with all volunteers. For preview.
+  $recipients = '';
+
+  foreach($form_state['storage']['volunteers_params'] as $fc_id => $params){
+    $no_email = '';
+    if(!$params['!email']){
+      $no_email = 'no-email-error';
+    }
+    $recipients .= '<a href="#" class="js-show-volunteer-mail ' .$no_email. '" id="' . $fc_id . '">' . $params['!name'] . '</a><br />';
+  }
+
+  $form['recipients'] = array(
+    '#type' => 'item',
+    '#weight' => 50,
+    '#markup' => $recipients,
+  );
+
+  return confirm_form($form, $question, $path, $description, $yes, $no);
+}
+
+/**
+ * Form submit handler for election start.
+ */
+function valhalla_election_start_election_form_submit($form, &$form_state){
+  $election_node = node_load(arg(3));
+  $election_title = $election_node->title;
+
+  $volunteers_params = $form_state['storage']['volunteers_params'];
 
   valhalla_mail_send_invitation($volunteers_params);
 

@@ -1204,56 +1204,49 @@ function valhalla_volunteers_form_valhalla_admin_settings_form_alter(&$form, &$f
 }
 
 /**
- * Implements hook_views_pre_render
+ * Implements hook_views_pre_render()
  *
  * Here we implement a custom filter for the add
  * volunteer to post view.
- *
- * @TODO:
- *  Much of this can probarbly be done using an SQL
- *  query, due to the restrictions of field_collection
- *  item entities and entityfieldquery.
  */
 function valhalla_volunteers_views_pre_render(&$view){
-  foreach ($view->result as $key => $result) {
+  // Only affect selected view displays.
+  if ($view->name == 'volunteers' && strstr($view->current_display, 'available_volunteers')) {
+
     $polling_station_node = node_load(arg(5));
     $date_field = field_get_items('node', $polling_station_node, 'field_ps_date');
 
-    $volunteer_query = new EntityFieldQuery();
+    foreach ($view->result as $key => $result) {
+      if ($date_field) {
+        $sql = 'SELECT *
+          FROM  `field_data_field_electioninfo` i
+          LEFT JOIN  `field_data_field_election` e ON e.entity_id = i.field_electioninfo_value
+          LEFT JOIN `field_data_field_ps_date` d ON i.field_electioninfo_value = d.entity_id
+          WHERE i.entity_id = :nid
+          AND d.field_ps_date_value= :date';
 
-    // Query if the volunteer has other posts
-    $volunteer_query->entityCondition('entity_type', 'field_collection_item')
-      ->entityCondition('bundle', 'field_electioninfo')
-      ->fieldCondition('field_election', 'target_id', $_SESSION['election_nid']);
+        $params = array(':nid' => $result->nid, ':date' => $date_field[0]['value']);
+      }
+      else {
+        // If the datefield is empty on the node (polling_station).
+        // We check wether the voluneer has a post with an empty date.
+        $sql = 'SELECT *
+          FROM  `field_data_field_electioninfo` i
+          LEFT JOIN  `field_data_field_election` e ON e.entity_id = i.field_electioninfo_value
+          LEFT JOIN `field_data_field_ps_date` d ON i.field_electioninfo_value = d.entity_id
+          WHERE i.entity_id = :nid
+          AND d.field_ps_date_value IS NULL';
 
-    // If the date field is not set, we handle it as if it was the same
-    // as the elections date.
-    if($date_field) {
-      // Query fields with same date.
-      $volunteer_query->fieldCondition('field_ps_date', 'value', $date_field[0]['value']);
-    }
+        $params = array(':nid' => $result->nid);
+      }
 
-    $result = $volunteer_query->execute();
+      // Execute the query.
+      $query = db_query($sql, $params)->fetchAll();
 
-    // If we have results, the volunteer has a post already.
-    if(!empty($result)){
-      //Stupid oneliner.
-      $volunteer_fcs = entity_load('field_collection_item', array_keys(array_shift($result)));
-      foreach($volunteer_fcs as $volunteer_fc){
-
-        if(!$date_field){
-          $fc_date_field = field_get_items('field_collection_item', $volunteer_fc, 'field_ps_date');
-        }
-
-        //Unset the result.
-        if ( $volunteer_fc->hostEntityId() == $view->result[$key]->nid ) {
-          if(!$date_field && ($fc_date_field == $date_field)){
-            unset( $view->result[$key]);
-          }
-          else {
-            unset( $view->result[$key]);
-          }
-        }
+      // And unset the volunteer from the result, if there is
+      // already a post.
+      if($query){
+        unset($view->result[$key]);
       }
     }
   }

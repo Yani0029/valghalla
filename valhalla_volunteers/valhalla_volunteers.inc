@@ -314,8 +314,8 @@ function _valhalla_helper_get_posts_to_fill($polling_station, $party_tid){
 
   // Loop over roles and fetch count for each role on polling station.
   foreach ($roles as $role_nid => $role_title){
-    $role_count = _valhalla_helper_get_roles_count(array($polling_station->nid), $role_nid, $party_tid); 
-    // Due to the structure that is expected in the recieving end. We need to to this. 
+    $role_count = _valhalla_helper_get_roles_count(array($polling_station->nid), $role_nid, $party_tid);
+    // Due to the structure that is expected in the recieving end. We need to to this.
     while ($role_count) {
       $posts_to_fill[] = array('title' => $role_title, 'nid' => $role_nid);
       $role_count--;
@@ -491,6 +491,7 @@ function _valhalla_helper_get_token_values($entity){
 
   if(is_object($post_node)){
     $position = $post_node->title;
+    $position_nid = $post_node->nid;
 
     if ($field = field_get_items('node', $post_node, 'field_time')) {
       $time = $field[0]['value'];
@@ -503,6 +504,7 @@ function _valhalla_helper_get_token_values($entity){
 
   return array(
     'nid' => $volunteer_nid,
+    'position_nid' => $position_nid,
     '!name' => $name,
     '!email' => $email,
     '!phone' => $phone,
