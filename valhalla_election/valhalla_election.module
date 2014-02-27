@@ -16,8 +16,28 @@ function valhalla_election_menu(){
     'page callback' => 'valhalla_election_start_election',
     'access callback' => true,
   );
+  
+  $items['valhalla/election/stop'] = array(
+    'page callback' => 'valhalla_election_stop_election',
+    'access callback' => true,
+  );
 
   return $items;
+}
+
+function valhalla_election_stop_election($election_nid = false){
+  if(!$election_nid){
+    drupal_goto('<front>');
+    return;
+  }
+
+  $election_node = node_load($election_nid);
+
+  $election_node->field_election_status = array();
+
+  node_save($election_node);
+
+  drupal_goto($_SERVER['HTTP_REFERER']);
 }
 
 /**
@@ -26,6 +46,7 @@ function valhalla_election_menu(){
 function valhalla_election_start_election($election_nid = false){
   if(!$election_nid){
     drupal_goto('<front>');
+    return;
   }
   return drupal_get_form('valhalla_election_start_election_form');
 }
@@ -102,6 +123,11 @@ function valhalla_election_start_election_form($form, &$form_state){
 function valhalla_election_start_election_form_submit($form, &$form_state){
   $election_node = node_load(arg(3));
   $election_title = $election_node->title;
+
+  // Set election active on node
+  $election_node->field_election_status['en'][0]['value'] = 1;
+
+  node_save($election_node);
 
   $volunteers_params = $form_state['storage']['volunteers_params'];
 
