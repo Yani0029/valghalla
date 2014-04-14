@@ -14,6 +14,14 @@ jQuery(function(){
       var element = this;
       jQuery.post(this.href, function(data) {
         jQuery('#volunteer-station-list-item-' + data.id + ' dd div').html(data.html);
+        jQuery('#volunteer-station-list-extra-' + data.id).remove();
+
+        setTimeout(function(){
+          if(jQuery('[id*=volunteer-station-list-extra]').length == 0){
+            jQuery('.volunteer-station-list-extra-wrapper').remove();
+          }
+        }, 300);
+
         jQuery(element).remove();
         if(typeof data.action !== undefined && data.action === "remove"){
           jQuery('#volunteer-station-list-item-' + data.id + ' dd a.add').show();
