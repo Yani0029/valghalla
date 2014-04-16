@@ -36,6 +36,11 @@ function valhalla_volunteers_permission() {
 function valhalla_volunteers_menu() {
 
   return array(
+      'volunteers/get' => array(
+          'access callback' => 'user_is_logged_in',
+          'page callback' => 'valhalla_volunteers_get_page',
+          'type' => MENU_CALLBACK,
+      ),
       'volunteers/rsvp' => array(
           'title' => 'Anmodning om svar',
           'access arguments' => array('volunteers rsvp'),
@@ -50,14 +55,14 @@ function valhalla_volunteers_menu() {
       ),
       'volunteers/station/%' => array(
           'title' => 'Håndtér tilforordnede',
-          'access arguments' => array('volunteers rsvp'),
+          'access callback' => 'user_is_logged_in',
           'page callback' => 'valhalla_volunteers_to_polling_station',
           'page arguments' => array(2),
           'type' => MENU_CALLBACK,
       ),
       'ajax/volunteers/station/%' => array(
           'title' => 'Håndtér tilforordnede',
-          'access arguments' => array('volunteers rsvp'),
+          'access callback' => 'user_is_logged_in',
           'page callback' => 'valhalla_volunteers_to_polling_station_ajax',
           'page arguments' => array(3),
           'type' => MENU_CALLBACK,
@@ -79,13 +84,6 @@ function valhalla_volunteers_menu() {
           'page callback' => 'drupal_get_form',
           'page arguments' => array('valhalla_volunteers_add_sub_secretary_form'),
           'access arguments' => array('administer sub secretaries'),
-          'type' => MENU_CALLBACK,
-      ),
-      'valhalla/change/party/%' => array(
-          'title' => 'Skift parti',
-          'page callback' => 'valhalla_volunteers_change_party',
-          'page arguments' => array(3),
-          'access arguments' => array('administer valhalla'),
           'type' => MENU_CALLBACK,
       ),
       'volunteers/data/%' => array(
@@ -334,6 +332,29 @@ function valhalla_volunteers_rsvp_form_submit($form, &$form_state) {
   unset($_SESSION['valhalla_volunteer']);
 }
 
+function valhalla_volunteers_get_page(){
+  $volunteer_query = new EntityFieldQuery();
+
+  $volunteer_query->entityCondition('entity_type', 'node')
+  ->entityCondition('bundle', 'volunteers');
+
+  $volunteer_nids = array_shift($volunteer_query->execute());
+
+  $sql = 'SELECT
+            *
+          FROM
+            `node`
+          WHERE
+            `nid`
+          IN (:nids);'; 
+
+  $params = array(':nids' => implode(array_keys($volunteer_nids), ','));
+  
+  $volunteer_info = db_query($sql, $params)->fetchAll();
+
+  drupal_json_output($volunteer_info);
+}
+
 /**
  * build and display the matrix for adding volunteers to polling stations
  *
@@ -355,6 +376,7 @@ function valhalla_volunteers_to_polling_station($station_id = NULL) {
   drupal_add_library('system', 'ui.dialog');
   drupal_add_js('var valhalla_destination_path = "' . implode('/', arg()) . '";', 'inline');
   drupal_add_js(drupal_get_path('module', 'valhalla_volunteers') . '/valhalla_volunteers.js');
+  drupal_add_js(drupal_get_path('module', 'valhalla_volunteers') . '/js/add_volunteer_to_station.js');
   module_load_include('inc', 'valhalla_volunteers', 'valhalla_volunteers');
   $user_party_id = empty($user->field_party[LANGUAGE_NONE][0]['tid']) ? FALSE : $user->field_party[LANGUAGE_NONE][0]['tid'];
   $polling_station = node_load($station_id);
@@ -390,8 +412,8 @@ function valhalla_volunteers_to_polling_station($station_id = NULL) {
 
       $markup_temp .= valhalla_volunteers_to_polling_station_markup($polling_station, $term->tid, TRUE);
       if($markup_temp){
-        $markup .= '<h2>'.$term->name.'</h2>';
-        $markup .= $markup_temp;
+        $markup .= '<h2>' . $term->name .'</h2>';
+        $markup .= '<div class="party-volunteers">' . $markup_temp . '</div>';
       }
 
     }
@@ -399,7 +421,7 @@ function valhalla_volunteers_to_polling_station($station_id = NULL) {
   else {
     $markup .= valhalla_volunteers_to_polling_station_markup($polling_station, $user_party_id);
   }
-  return $markup;
+  return '<div class="page-actions"><a href="/node/'.$station_id.'/edit">Rediger</a></div>' . $markup;
 }
 
 /**
@@ -562,13 +584,12 @@ function valhalla_volunteers_to_polling_station_ajax($action) {
        * arg(7) = post
        */
 
-      $tmp = explode('-', arg(7));
-
-      $user_nid = arg(4);
-      $post_nid = $tmp[0];
-      $party_tid = $tmp[1];
-      $station_nid = arg(5);
-
+      $volunteer_nid = $_POST['volunteer'];
+      $role_nid = $_POST['role'];
+      $party_tid = $_POST['party'];
+      $station_nid = $_POST['station'];
+      $list_id = $_POST['list_id'];
+      
       $polling_station_node = node_load($station_nid);
 
       // tth: this is a bad idea.
@@ -577,12 +598,12 @@ function valhalla_volunteers_to_polling_station_ajax($action) {
       // Save info to field collection.
       $fc = entity_create('field_collection_item', array('field_name' => 'field_electioninfo'));
 
-      $node = node_load($user_nid);
+      $node = node_load($volunteer_nid);
       $fc->setHostEntity('node', $node);
       $fc->field_election[LANGUAGE_NONE][0]['target_id'] = $_SESSION['election_nid'];
       $fc->field_vlnt_station[LANGUAGE_NONE][0]['target_id'] = $station_nid;
       $fc->field_post_party[LANGUAGE_NONE][0]['target_id'] = $party_tid;
-      $fc->field_post_role[LANGUAGE_NONE][0]['target_id'] = $post_nid;
+      $fc->field_post_role[LANGUAGE_NONE][0]['target_id'] = $role_nid;
       $fc->field_rsvp[LANGUAGE_NONE][0]['value'] = 0;
       $fc->field_token[LANGUAGE_NONE][0]['value'] = user_password(10);
       $fc->field_ps_date = $polling_station_node->field_ps_date;
@@ -590,8 +611,8 @@ function valhalla_volunteers_to_polling_station_ajax($action) {
 
       $output->status = TRUE;
       $output->action = 'add';
-      $output->id = arg(6);
-      $output->nid = $fc->item_id;
+      $output->list_id = $list_id;
+      $output->fc_id = $fc->item_id;
       $output->html = _valhalla_helper_wrap_name($node, "p", $fc->item_id);
       break;
 
@@ -1103,28 +1124,6 @@ function valhalla_volunteers_form_user_profile_form_alter(&$form, &$form_state, 
   foreach ($hide_elements as $field_name) {
     $form[$field_name]['#access'] = FALSE;
   }
-}
-
-/**
- * update the current users party relation
- *
- * @global stdClass $user
- * @param int $tid
- */
-function valhalla_volunteers_change_party($tid) {
-  global $user;
-
-  $edit = array(
-      'uid' => $user->uid
-  );
-  if ($tid == 0) {
-    $edit['field_party'] = array();
-  } else {
-    $edit['field_party'][LANGUAGE_NONE][0]['tid'] = $tid;
-  }
-
-  user_save($user, $edit);
-  drupal_goto('status');
 }
 
 /**
