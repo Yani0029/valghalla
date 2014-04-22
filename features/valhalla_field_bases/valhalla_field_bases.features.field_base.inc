@@ -345,9 +345,13 @@ function valhalla_field_bases_field_default_field_bases() {
     'indexes' => array(),
     'locked' => 0,
     'module' => 'number',
-    'settings' => array(),
-    'translatable' => 1,
-    'type' => 'number_integer',
+    'settings' => array(
+      'decimal_separator' => '.',
+      'precision' => 10,
+      'scale' => 2,
+    ),
+    'translatable' => 0,
+    'type' => 'number_decimal',
   );
 
   // Exported field_base: 'field_election_mails_send'
@@ -737,62 +741,6 @@ function valhalla_field_bases_field_default_field_bases() {
     'settings' => array(),
     'translatable' => 1,
     'type' => 'number_integer',
-  );
-
-  // Exported field_base: 'field_rsvp'
-  $field_bases['field_rsvp'] = array(
-    'active' => 1,
-    'cardinality' => 1,
-    'deleted' => 0,
-    'entity_types' => array(),
-    'field_name' => 'field_rsvp',
-    'foreign keys' => array(),
-    'indexes' => array(
-      'value' => array(
-        0 => 'value',
-      ),
-    ),
-    'locked' => 0,
-    'module' => 'list',
-    'settings' => array(
-      'allowed_values' => array(
-        1 => 'ja',
-        2 => 'nej',
-        3 => 'aldrig',
-      ),
-      'allowed_values_function' => '',
-    ),
-    'translatable' => 1,
-    'type' => 'list_text',
-  );
-
-  // Exported field_base: 'field_rsvp_comment'
-  $field_bases['field_rsvp_comment'] = array(
-    'active' => 1,
-    'cardinality' => 1,
-    'deleted' => 0,
-    'entity_types' => array(),
-    'field_name' => 'field_rsvp_comment',
-    'foreign keys' => array(
-      'format' => array(
-        'columns' => array(
-          'format' => 'format',
-        ),
-        'table' => 'filter_format',
-      ),
-    ),
-    'indexes' => array(
-      'format' => array(
-        0 => 'format',
-      ),
-    ),
-    'locked' => 0,
-    'module' => 'text',
-    'settings' => array(
-      'max_length' => 255,
-    ),
-    'translatable' => 1,
-    'type' => 'text',
   );
 
   // Exported field_base: 'field_secretary'

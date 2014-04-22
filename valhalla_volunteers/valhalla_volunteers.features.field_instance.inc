@@ -23,11 +23,11 @@ function valhalla_volunteers_field_default_field_instances() {
         'settings' => array(
           'decimal_separator' => '.',
           'prefix_suffix' => TRUE,
-          'scale' => 0,
+          'scale' => 2,
           'thousand_separator' => ' ',
         ),
-        'type' => 'number_integer',
-        'weight' => 7,
+        'type' => 'number_decimal',
+        'weight' => 10,
       ),
     ),
     'entity_type' => 'field_collection_item',
@@ -504,52 +504,6 @@ function valhalla_volunteers_field_default_field_instances() {
       'settings' => array(),
       'type' => 'options_select',
       'weight' => 7,
-    ),
-  );
-
-  // Exported field_instance: 'node-roles-field_role_diaet'
-  $field_instances['node-roles-field_role_diaet'] = array(
-    'bundle' => 'roles',
-    'default_value' => NULL,
-    'deleted' => 0,
-    'description' => '',
-    'display' => array(
-      'default' => array(
-        'label' => 'above',
-        'module' => 'number',
-        'settings' => array(
-          'decimal_separator' => '.',
-          'prefix_suffix' => TRUE,
-          'scale' => 0,
-          'thousand_separator' => ' ',
-        ),
-        'type' => 'number_integer',
-        'weight' => 8,
-      ),
-      'teaser' => array(
-        'label' => 'above',
-        'settings' => array(),
-        'type' => 'hidden',
-        'weight' => 0,
-      ),
-    ),
-    'entity_type' => 'node',
-    'field_name' => 'field_role_diaet',
-    'label' => 'Diæt',
-    'required' => 0,
-    'settings' => array(
-      'max' => '',
-      'min' => '',
-      'prefix' => '',
-      'suffix' => '',
-      'user_register_form' => FALSE,
-    ),
-    'widget' => array(
-      'active' => 0,
-      'module' => 'number',
-      'settings' => array(),
-      'type' => 'number',
-      'weight' => 5,
     ),
   );
 
