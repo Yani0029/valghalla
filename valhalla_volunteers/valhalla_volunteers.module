@@ -101,17 +101,6 @@ function valhalla_volunteers_menu() {
           'page arguments' => array(2),
           'type' => MENU_CALLBACK,
       ),
-      // administration screens
-      'admin/valhalla' => array(
-          'title' => 'Valhalla',
-          'description' => 'Configure valhalla.',
-          'page callback' => 'valhalla_volunteers_admin',
-          'page arguments' => array('test'),
-          'access arguments' => array('administer valhalla'),
-          'file' => 'valhalla_volunteers_admin.inc',
-          'position' => 'left',
-          'weight' => -4,
-      ),
       'admin/valhalla/valhalla' => array(
           'title' => 'Overview',
           'description' => 'blablabla... valhalla election overview.',
