@@ -317,7 +317,7 @@ function _valhalla_helper_get_posts_to_fill($polling_station, $party_tid){
     $role_count = _valhalla_helper_get_roles_count(array($polling_station->nid), $role_nid, $party_tid);
     // Due to the structure that is expected in the recieving end. We need to to this.
     while ($role_count) {
-      $posts_to_fill[] = array('title' => $role_title, 'nid' => $role_nid);
+      $posts_to_fill[] = array('role_title' => $role_title, 'role_nid' => $role_nid);
       $role_count--;
     }
   }

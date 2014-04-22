@@ -10,6 +10,237 @@
 function valhalla_volunteers_field_default_field_instances() {
   $field_instances = array();
 
+  // Exported field_instance: 'field_collection_item-field_electioninfo-field_election'
+  $field_instances['field_collection_item-field_electioninfo-field_election'] = array(
+    'bundle' => 'field_electioninfo',
+    'default_value' => NULL,
+    'deleted' => 0,
+    'description' => '',
+    'display' => array(
+      'default' => array(
+        'label' => 'above',
+        'module' => 'entityreference',
+        'settings' => array(
+          'link' => FALSE,
+        ),
+        'type' => 'entityreference_label',
+        'weight' => 0,
+      ),
+    ),
+    'entity_type' => 'field_collection_item',
+    'field_name' => 'field_election',
+    'label' => 'Valg',
+    'required' => 0,
+    'settings' => array(
+      'user_register_form' => FALSE,
+    ),
+    'widget' => array(
+      'active' => 1,
+      'module' => 'options',
+      'settings' => array(),
+      'type' => 'options_select',
+      'weight' => 1,
+    ),
+  );
+
+  // Exported field_instance: 'field_collection_item-field_electioninfo-field_post_party'
+  $field_instances['field_collection_item-field_electioninfo-field_post_party'] = array(
+    'bundle' => 'field_electioninfo',
+    'default_value' => NULL,
+    'deleted' => 0,
+    'description' => '',
+    'display' => array(
+      'default' => array(
+        'label' => 'above',
+        'module' => 'entityreference',
+        'settings' => array(
+          'link' => FALSE,
+        ),
+        'type' => 'entityreference_label',
+        'weight' => 3,
+      ),
+    ),
+    'entity_type' => 'field_collection_item',
+    'field_name' => 'field_post_party',
+    'label' => 'Parti plads',
+    'required' => 0,
+    'settings' => array(
+      'user_register_form' => FALSE,
+    ),
+    'widget' => array(
+      'active' => 1,
+      'module' => 'options',
+      'settings' => array(),
+      'type' => 'options_select',
+      'weight' => 4,
+    ),
+  );
+
+  // Exported field_instance: 'field_collection_item-field_electioninfo-field_post_role'
+  $field_instances['field_collection_item-field_electioninfo-field_post_role'] = array(
+    'bundle' => 'field_electioninfo',
+    'default_value' => NULL,
+    'deleted' => 0,
+    'description' => '',
+    'display' => array(
+      'default' => array(
+        'label' => 'above',
+        'module' => 'entityreference',
+        'settings' => array(
+          'link' => FALSE,
+        ),
+        'type' => 'entityreference_label',
+        'weight' => 2,
+      ),
+    ),
+    'entity_type' => 'field_collection_item',
+    'field_name' => 'field_post_role',
+    'label' => 'Rolle',
+    'required' => 0,
+    'settings' => array(
+      'user_register_form' => FALSE,
+    ),
+    'widget' => array(
+      'active' => 1,
+      'module' => 'options',
+      'settings' => array(),
+      'type' => 'options_select',
+      'weight' => 3,
+    ),
+  );
+
+  // Exported field_instance: 'field_collection_item-field_electioninfo-field_rsvp'
+  $field_instances['field_collection_item-field_electioninfo-field_rsvp'] = array(
+    'bundle' => 'field_electioninfo',
+    'default_value' => NULL,
+    'deleted' => 0,
+    'description' => '',
+    'display' => array(
+      'default' => array(
+        'label' => 'above',
+        'module' => 'list',
+        'settings' => array(),
+        'type' => 'list_default',
+        'weight' => 6,
+      ),
+    ),
+    'entity_type' => 'field_collection_item',
+    'field_name' => 'field_rsvp',
+    'label' => 'Status',
+    'required' => 0,
+    'settings' => array(
+      'user_register_form' => FALSE,
+    ),
+    'widget' => array(
+      'active' => 1,
+      'module' => 'options',
+      'settings' => array(),
+      'type' => 'options_select',
+      'weight' => 10,
+    ),
+  );
+
+  // Exported field_instance: 'field_collection_item-field_electioninfo-field_rsvp_comment'
+  $field_instances['field_collection_item-field_electioninfo-field_rsvp_comment'] = array(
+    'bundle' => 'field_electioninfo',
+    'default_value' => NULL,
+    'deleted' => 0,
+    'description' => '',
+    'display' => array(
+      'default' => array(
+        'label' => 'above',
+        'module' => 'text',
+        'settings' => array(),
+        'type' => 'text_default',
+        'weight' => 5,
+      ),
+    ),
+    'entity_type' => 'field_collection_item',
+    'field_name' => 'field_rsvp_comment',
+    'label' => 'Status besked',
+    'required' => 0,
+    'settings' => array(
+      'text_processing' => 0,
+      'user_register_form' => FALSE,
+    ),
+    'widget' => array(
+      'active' => 1,
+      'module' => 'text',
+      'settings' => array(
+        'size' => 60,
+      ),
+      'type' => 'text_textfield',
+      'weight' => 8,
+    ),
+  );
+
+  // Exported field_instance: 'field_collection_item-field_electioninfo-field_token'
+  $field_instances['field_collection_item-field_electioninfo-field_token'] = array(
+    'bundle' => 'field_electioninfo',
+    'default_value' => NULL,
+    'deleted' => 0,
+    'description' => '',
+    'display' => array(
+      'default' => array(
+        'label' => 'above',
+        'module' => 'text',
+        'settings' => array(),
+        'type' => 'text_default',
+        'weight' => 4,
+      ),
+    ),
+    'entity_type' => 'field_collection_item',
+    'field_name' => 'field_token',
+    'label' => 'Token',
+    'required' => 0,
+    'settings' => array(
+      'text_processing' => 0,
+      'user_register_form' => FALSE,
+    ),
+    'widget' => array(
+      'active' => 1,
+      'module' => 'text',
+      'settings' => array(
+        'size' => 60,
+      ),
+      'type' => 'text_textfield',
+      'weight' => 6,
+    ),
+  );
+
+  // Exported field_instance: 'field_collection_item-field_electioninfo-field_vlnt_station'
+  $field_instances['field_collection_item-field_electioninfo-field_vlnt_station'] = array(
+    'bundle' => 'field_electioninfo',
+    'default_value' => NULL,
+    'deleted' => 0,
+    'description' => '',
+    'display' => array(
+      'default' => array(
+        'label' => 'above',
+        'module' => 'entityreference',
+        'settings' => array(
+          'link' => FALSE,
+        ),
+        'type' => 'entityreference_label',
+        'weight' => 1,
+      ),
+    ),
+    'entity_type' => 'field_collection_item',
+    'field_name' => 'field_vlnt_station',
+    'label' => 'Valgsted',
+    'required' => 0,
+    'settings' => array(
+      'user_register_form' => FALSE,
+    ),
+    'widget' => array(
+      'active' => 1,
+      'module' => 'options',
+      'settings' => array(),
+      'type' => 'options_select',
+      'weight' => 2,
+    ),
+  );
+
   // Exported field_instance: 'node-roles-field_description'
   $field_instances['node-roles-field_description'] = array(
     'bundle' => 'roles',
@@ -758,6 +989,49 @@ function valhalla_volunteers_field_default_field_instances() {
     ),
   );
 
+  // Exported field_instance: 'node-volunteers-field_electioninfo'
+  $field_instances['node-volunteers-field_electioninfo'] = array(
+    'bundle' => 'volunteers',
+    'default_value' => NULL,
+    'deleted' => 0,
+    'description' => '',
+    'display' => array(
+      'default' => array(
+        'label' => 'above',
+        'module' => 'field_collection',
+        'settings' => array(
+          'add' => 'Tilføj',
+          'delete' => 'Slet',
+          'description' => TRUE,
+          'edit' => 'Redigér',
+          'view_mode' => 'full',
+        ),
+        'type' => 'field_collection_view',
+        'weight' => 29,
+      ),
+      'teaser' => array(
+        'label' => 'above',
+        'settings' => array(),
+        'type' => 'hidden',
+        'weight' => 0,
+      ),
+    ),
+    'entity_type' => 'node',
+    'field_name' => 'field_electioninfo',
+    'label' => 'Valginfo',
+    'required' => 0,
+    'settings' => array(
+      'user_register_form' => FALSE,
+    ),
+    'widget' => array(
+      'active' => 0,
+      'module' => 'field_collection',
+      'settings' => array(),
+      'type' => 'field_collection_embed',
+      'weight' => 21,
+    ),
+  );
+
   // Exported field_instance: 'node-volunteers-field_email'
   $field_instances['node-volunteers-field_email'] = array(
     'bundle' => 'volunteers',
@@ -1163,18 +1437,23 @@ function valhalla_volunteers_field_default_field_instances() {
   t('Label');
   t('Mødetidspunkt');
   t('Parti');
+  t('Parti plads');
   t('Polling Station');
   t('Polling Station post');
   t('Påmindelse');
   t('RSVP - Aldrig');
   t('RSVP - Ja');
   t('RSVP - Nej');
+  t('Rolle');
   t('Skriv dit CPR nummer inkl bindestreg. F.eks. 123456-7890.');
   t('Status');
   t('Status besked');
   t('Telefon');
   t('Telefon 2');
   t('Token');
+  t('Valg');
+  t('Valginfo');
+  t('Valgsted');
   t('Zip code');
   t('only for internal use');
 

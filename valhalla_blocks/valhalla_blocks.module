@@ -47,14 +47,6 @@ function valhalla_blocks_menu(){
 }
 
 /**
- * implements hook_init()
- */
-function valhalla_blocks_init(){
-  // JS for fetching block contents with AJAX.
-  drupal_add_js(drupal_get_path('module', 'valhalla_blocks') . '/js/valhalla_blocks.js', 'file');
-}
-
-/**
  * hook_block_view implementation
  */
 function valhalla_blocks_block_view($delta = '') {
@@ -69,6 +61,7 @@ function valhalla_blocks_block_view($delta = '') {
     // fill.
     case 'party_status':
     case 'party_constituency_status':
+      drupal_add_js(drupal_get_path('module', 'valhalla_blocks') . '/js/valhalla_blocks.js', 'file');
       return array("content" => '<div class="spinner-loading" id="valhalla_block-' . $delta . '" ></div><script>valhalla_blocks.loadOverview("' . $delta . '");</script>');
       break;
     }
@@ -137,7 +130,7 @@ function valhalla_change_election_party_form(){
 /**
  * Election switcher form submit
  *
- * Set election nid in $_SESSION. That is all.
+ * Set election nid in $_SESSION. And update user party tid.
  */
 function valhalla_change_election_party_form_submit(&$form, $form_state){
   // Set election to watch
@@ -436,8 +429,6 @@ function _valhalla_blocks_generate_constituency_markup($constituency_nids, $poll
         $constituency_total['total_count']['rsvp_ok'] += $data['total_count']['rsvp_ok'];
         $constituency_total['total_count']['rsvp_no'] += $data['total_count']['rsvp_no'];
 
-        error_log(print_r($data['total_count'],1 ));
-
         foreach ($data['role_count'] as $role_nid =>  $role_count) {
           $constituency_total['role_count'][$role_nid]['assigned'] += $role_count['assigned'];
           $constituency_total['role_count'][$role_nid]['total'] += $role_count['total'];
@@ -456,7 +447,6 @@ function _valhalla_blocks_generate_constituency_markup($constituency_nids, $poll
       $markup .= '<td class="total column-count ' . $label . ' ">' . $constituency_total['role_count'][$role_nid]['total'];
       $markup .= '/' . $constituency_total['role_count'][$role_nid]['assigned'] . '</td>';
     }
-
     $label = _valhalla_blocks_get_label($constituency_total['total_count']);
 
     $markup .= '<td class="total column-count ' . $label . ' ">' . $constituency_total['total_count']['total'];
@@ -487,7 +477,7 @@ function _valhalla_blocks_generate_polling_station_markup($polling_station_nids,
       $markup .= '<td class="column-count ' . $label . '">'  .    $role_count['total'] . '/'. $role_count['assigned'] . '</td>';
     }
 
-    $label = _valhalla_blocks_get_label($role_count);
+    $label = _valhalla_blocks_get_label($polling_station_count[$polling_station_nid]['total_count']);
 
     $markup .= '<td class="column-count ' . $label . '">'  .  $polling_station_count[$polling_station_nid]['total_count']['total'];
     $markup .= '/'. $polling_station_count[$polling_station_nid]['total_count']['assigned'] . '</td>';

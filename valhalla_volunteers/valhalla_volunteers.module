@@ -1,5 +1,11 @@
 <?php
 /**
+ * @file
+ * Code for the valhalla volunteers feature.
+ */
+
+include_once 'valhalla_volunteers.features.inc';
+/**
  *
  * @comments
  *  tth: Thomas Thune Hansen <tth@bellcom.dk>
@@ -327,11 +333,8 @@ function valhalla_volunteers_rsvp_form_submit($form, &$form_state) {
   $params['rsvp_type'] = $types[$form_state['values']['rsvp']];
   $to = $params['!email'];
   $from = variable_get('site_mail', 'admin@example.com');
-  drupal_mail('valhalla_mail', 'rsvp_confirm',$to,$language,$params,$from,TRUE);
-  drupal_set_message(t('Vi har opdateret din status.'));
-
-  // allow the "wife" to set her status as well.
-  unset($_SESSION['valhalla_volunteer']);
+  drupal_mail('valhalla_mail', 'rsvp_confirm', $to, $language, $params, $from, TRUE);
+  drupal_set_message(t('Vi har modtaget dit svar.'));
 }
 
 /**
@@ -342,10 +345,10 @@ function valhalla_volunteers_rsvp_form_submit($form, &$form_state) {
  * @param int $station_id
  * @return string
  */
-function valhalla_volunteers_to_polling_station($station_id = NULL) {
+function valhalla_volunteers_to_polling_station($station_nid = NULL) {
   global $user, $language;
 
-  if (empty($station_id)) {
+  if (empty($station_nid)) {
     drupal_set_title(t('Access denied'));
     return drupal_access_denied();
   }
@@ -357,7 +360,7 @@ function valhalla_volunteers_to_polling_station($station_id = NULL) {
   drupal_add_js(drupal_get_path('module', 'valhalla_volunteers') . '/valhalla_volunteers.js');
   module_load_include('inc', 'valhalla_volunteers', 'valhalla_volunteers');
   $user_party_id = empty($user->field_party[LANGUAGE_NONE][0]['tid']) ? FALSE : $user->field_party[LANGUAGE_NONE][0]['tid'];
-  $polling_station = node_load($station_id);
+  $polling_station = node_load($station_nid);
   $field_digital_election_list=field_get_items('node', $polling_station, 'field_digital_election_list');
 
   if (isset($field_digital_election_list)&&(int)$field_digital_election_list[0]['value']==1){
@@ -399,7 +402,33 @@ function valhalla_volunteers_to_polling_station($station_id = NULL) {
   else {
     $markup .= valhalla_volunteers_to_polling_station_markup($polling_station, $user_party_id);
   }
-  return $markup;
+
+  $modal = '
+    <div class="modal fade">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+            <h4 class="modal-title">Vælg tilforordnet</h4>
+          </div>
+          <div class="modal-body">
+            <p></p>
+            <div class="spinner-loading"></div>
+            <table class="volunteers-list table">
+              <thead>
+                <tr>
+                  <th>Parti</th>
+                  <th>Navn</th>
+                  <th>Vælg</th>
+                </tr>
+              </thead> 
+            </table>
+          </div>
+        </div><!-- /.modal-content -->
+      </div><!-- /.modal-dialog -->
+    </div><!-- /.modal -->';
+
+  return $markup . $modal;
 }
 
 /**
@@ -416,7 +445,7 @@ function valhalla_volunteers_to_polling_station_markup($polling_station, $user_p
     return theme('station', array(
             'posts_to_fill' => $posts_array['posts_to_fill'],
             'party_id' => $posts_array['user_party_id'],
-            'station_id' => $posts_array['station_id'],
+            'pollingstation_nid' => $posts_array['station_nid'],
             'existing' => $posts_array['existing'],
           ));
   }
@@ -455,7 +484,7 @@ function valhalla_volunteers_to_polling_station_roles($polling_station, $party_t
       ->fieldCondition('field_election', 'target_id', $_SESSION['election_nid'])
       ->fieldCondition('field_vlnt_station', 'target_id', $station_id)
       ->fieldCondition('field_post_party', 'target_id', $party_tid)
-      ->fieldCondition('field_post_role', 'target_id', $value['nid']);
+      ->fieldCondition('field_post_role', 'target_id', $value['role_nid']);
 
     $result = array_shift($volunteer_query->execute());
 
@@ -499,453 +528,145 @@ function valhalla_volunteers_to_polling_station_roles($polling_station, $party_t
       $value = $value;
     }
 
-    $posts_to_fill[$id] = array('nid' => $value['nid'], 'title' => $value['title'], 'party_id' => $party_tid);
+    $posts_to_fill[$id] = array('role_nid' => $value['role_nid'], 'role_title' => $value['role_title'], 'party_tid' => $party_tid);
 
     $id = NULL;
   }
-
   return array(
           'posts_to_fill' => $posts_to_fill,
           'user_party_id' => $party_tid,
-          'station_id' => $station_id,
+          'station_nid' => $station_id,
           'existing' => $existing,
           );
 }
 
 /**
  * handle ajax calls
- *
- * @global stdClass $user
- * @global stdClass $language
- * @param string $action
  */
 function valhalla_volunteers_to_polling_station_ajax($action) {
-  global $user, $language;
-
-  module_load_include('inc', 'valhalla_volunteers', 'valhalla_volunteers');
-
-  $user = user_load($user->uid);
-
-  $user_party_id = empty($user->field_party[LANGUAGE_NONE][0]['tid']) ? FALSE : $user->field_party[LANGUAGE_NONE][0]['tid'];
-
-  $output = new stdClass;
-  $output->status = FALSE;
-
-  switch ($action) {
-    case 'list':
-      /**
-       * party id ..........: $user_party_id
-       * polling station id : arg(5)
-       * seat number .......: arg(6)
-       * post ..............: arg(7)
-       */
-      $display_id = 'available_volunteers_filtered';
-
-      if(in_array('Valgsekretær', $user->roles)){
-        $display_id = 'available_volunteers_filtered_secretary';
-        $user_party_id = 'all';
-      }
-
-      $html = views_embed_view('volunteers', $display_id, $user_party_id, arg(5), arg(6), arg(7));
-
-      if (empty($html)) {
-        $html = '<p>' . t('Der er pt. ingen tilforordnede tilrådighed.') . '</p>';
-      }
-      die($html);
+  switch($action){
+    case 'getvolunteers':
+      drupal_json_output(valhalla_volunteers_get_volunteers());
       break;
 
     case 'add':
-      /**
-       * arg(4) = user nid
-       * arg(5) = polling station nid - party id
-       * arg(6) = seat number
-       * arg(7) = post
-       */
+      $role_nid = (int)$_POST['role_nid'];
+      $party_tid = (int)$_POST['party_tid'];
+      $election_nid = (int)$_SESSION['election_nid'];
+      $volunteer_nid = (int)$_POST['volunteer_nid'];
+      $pollingstation_nid = (int)$_POST['pollingstation_nid'];
 
-      $tmp = explode('-', arg(7));
-
-      $user_nid = arg(4);
-      $post_nid = $tmp[0];
-      $party_tid = $tmp[1];
-      $station_nid = arg(5);
-
-      $polling_station_node = node_load($station_nid);
-
-      // tth: this is a bad idea.
-      $role = strtoupper($post);
-
-      // Save info to field collection.
-      $fc = entity_create('field_collection_item', array('field_name' => 'field_electioninfo'));
-
-      $node = node_load($user_nid);
-      $fc->setHostEntity('node', $node);
-      $fc->field_election[LANGUAGE_NONE][0]['target_id'] = $_SESSION['election_nid'];
-      $fc->field_vlnt_station[LANGUAGE_NONE][0]['target_id'] = $station_nid;
-      $fc->field_post_party[LANGUAGE_NONE][0]['target_id'] = $party_tid;
-      $fc->field_post_role[LANGUAGE_NONE][0]['target_id'] = $post_nid;
-      $fc->field_rsvp[LANGUAGE_NONE][0]['value'] = 0;
-      $fc->field_token[LANGUAGE_NONE][0]['value'] = user_password(10);
-      $fc->field_ps_date = $polling_station_node->field_ps_date;
-      $fc->save();
-
-      $output->status = TRUE;
-      $output->action = 'add';
-      $output->id = arg(6);
-      $output->nid = $fc->item_id;
-      $output->html = _valhalla_helper_wrap_name($node, "p", $fc->item_id);
+      valhalla_volunteers_add_volunteer_to_post($volunteer_nid, $pollingstation_nid, $role_nid, $party_tid, $election_nid);
       break;
 
     case 'remove':
-      /**
-       * arg(4) = fcid
-       * arg(5) = temp postid
-       */
-      if ($fcid = arg(4)) {
-        // Delete the field collection defining the
-        // volunteers post
-        $fc = entity_load_single('field_collection_item', $fcid);
-        $fc->delete();
-
-        $output->status = TRUE;
-        $output->action = 'remove';
-        $output->id = arg(5);
-        $output->html = t('vælg en anden/ny vagt');
-      }
+      $fcid = (int)$_POST['fcid'];
+      valhalla_volunteers_remove_volunteer_from_post($fcid);
       break;
   }
-  die(drupal_json_output($output));
 }
 
 /**
- * implements hook_node_insert()
+ * Fetch a list of volunteers, without a post
  */
-function valhalla_volunteers_node_insert($node){
-  // Send a mail when volunteer is added from form.
-  global $language;
+function valhalla_volunteers_get_volunteers(){
+  $start = time();
+  $volunteers = db_query('
+    SELECT * FROM `node` n
+    LEFT JOIN `field_data_field_electioninfo` e ON e.entity_id = n.nid
+    WHERE n.nid NOT IN (
+      SELECT entity_id 
+      FROM  `field_data_field_electioninfo` 
+      WHERE field_electioninfo_value
+      IN (
+        SELECT e.entity_id
+        FROM field_data_field_election e
+        WHERE e.field_election_target_id = :election_nid
+      )
+    )
+    AND n.type = \'volunteers\'
+    ', array(':election_nid' => $_SESSION['election_nid']))->fetchAll();
 
-  if (($node->type == 'volunteers') &&
-      isset($node->field_polling_station[$language->language][0]['nid']) &&
-      isset($node->field_polling_station_post[$language->language][0]['value']) &&
-      ($node->field_polling_station_post[$language->language][0]['value'] > 0) &&
-      ($node->field_rsvp[$language->language][0]['value'] == '') &&
-      empty($_POST['rsvp'])
-  ) {
-    valhalla_volunteers_send_rsvp($node);
+  foreach($volunteers as $key => $value){
+    $volunteer_nid = $value->nid;
+    //$node = node_load($volunteer_nid);
+
+    //$party_field = field_get_items('node', $node, 'field_party');
+
+    $term = taxonomy_term_load($party_field[0]['tid']);
+    $volunteer_party = '-';
+    if(is_object($term)){
+      $volunteer_party = $term->name;
+    }
+    $volunteer_result[] = array('volunteer_nid' => $node->nid, 'volunteer_name' => $value->title, 'volunteer_party' => $volunteer_party);
   }
+  error_log('Fetch all volunteers - Time: ' . (time() - $start));
+  return $volunteer_result;
 }
 
 /**
- * hook_node_update implementation
+ * Add volunteer to post
  *
- * @param stdClass $node
+ * @author Thomas Thune Hansen <tth@bellcom.dk>
  */
-function valhalla_volunteers_node_update($node) {
-  global $language;
+function valhalla_volunteers_add_volunteer_to_post($volunteer_nid, $pollingstation_nid, $role_nid, $party_tid, $election_nid){
+  // Save info to field collection.
+  $fc = entity_create('field_collection_item', array('field_name' => 'field_electioninfo'));
 
-  if (($node->type == 'volunteers') &&
-      isset($node->field_polling_station[$language->language][0]['nid']) &&
-      isset($node->field_polling_station_post[$language->language][0]['value']) &&
-      ($node->field_polling_station_post[$language->language][0]['value'] > 0) &&
-      ($node->field_rsvp[$language->language][0]['value'] == '') &&
-      empty($_POST['rsvp']) &&
-      arg(0) . arg(2) !== 'nodeedit'
-  ) {
-    valhalla_volunteers_send_rsvp($node);
+  $volunteer_node = node_load($volunteer_nid);
+  $fc->setHostEntity('node', $volunteer_node);
+  $fc->field_election[LANGUAGE_NONE][0]['target_id'] = $election_nid;
+  $fc->field_vlnt_station[LANGUAGE_NONE][0]['target_id'] = $pollingstation_nid;
+  $fc->field_post_party[LANGUAGE_NONE][0]['target_id'] = $party_tid;
+  $fc->field_post_role[LANGUAGE_NONE][0]['target_id'] = $role_nid;
+  $fc->field_rsvp[LANGUAGE_NONE][0]['value'] = 0;
+  $fc->field_token[LANGUAGE_NONE][0]['value'] = user_password(10);
+  if($fc->save()){
+    if(variable_get('valhalla_mail_send_invitation_on_add', TRUE)){
+      // @todo: Send invitation mail
+      error_log(__FILE__.':'.__LINE__.'send invitation mail'); // tth@bellcom.dk debugging
+    }
   }
+
+  return drupal_json_output(array('fcid' => $fc->item_id, 'html' => _valhalla_helper_wrap_name($volunteer_node, "p", $fc->item_id)));
 }
 
 /**
- * send rsvp emails
+ * Remove volunteer from post
  *
- * @param stdClass $node
+ * @author Thomas Thune Hansen <tth@bellcom.dk>
  */
-function valhalla_volunteers_send_rsvp($node) {
-  global $language;
+function valhalla_volunteers_remove_volunteer_from_post($fcid){
+  if($fc = entity_load_single('field_collection_item', $fcid)){
+    $fc->delete();
 
-  module_load_include('inc', 'valhalla_volunteers', 'valhalla_volunteers');
-  module_load_include('inc', 'valhalla_volunteers', 'valhalla_volunteers_admin_mail');
+    if(variable_get('valghalla_mail_remove', 0)){
+      // @todo: Send remove notification
+      //valhalla_volunteers_send_rsvp($node);
+      error_log(__FILE__.':'.__LINE__.'send remove mail'); // tth@bellcom.dk debugging
+    }
 
-  $election = _valhalla_helper_get_active_election();
-
-  // do not send mails if the election is not open.
-  if (FALSE == $election) {
-    return;
+    return drupal_json_output(array('success' => TRUE));
   }
+  return drupal_json_output(array('success' => FALSE));
 
-  $module = 'valhalla_volunteers';
-  $key = 'rsvp';
 
-  $to = $node->field_email[$language->language][0]['email'];
-  $from = variable_get('site_mail', 'admin@example.com');
-
-  $params = _valhalla_helper_get_volunteer_info_params($node);
-
-  $language = language_default();
-  $send = TRUE;
-
-  $result = drupal_mail('valhalla_mail', 'rsvp', $to, $language, $params, $from, $send);
 }
 
 /**
  * add volunteer form
  *
- * @return array
+ * Basically its just an embedded node_add form, slightly modified
+ *
+ * @author Thomas Thune Hansen <tth@bellcom.dk>
  */
 function valhalla_volunteers_add() {
   drupal_set_title(t('Tilføj ny tilforordnet'));
-  $out = drupal_get_form('valhalla_volunteers_add_form');
-  return $out;
+
+  module_load_include('inc', 'node', 'node.pages');
+  return node_add('volunteers');
 }
 
-/**
- * build the "add volunteer" form
- *
- * @global stdClass $user
- * @global stdClass $language
- * @param string $form
- * @param array $form_state
- * @return array
- */
-function valhalla_volunteers_add_form($form, &$form_state) {
-  global $user, $language;
-
-  module_load_include('inc', 'valhalla_volunteers', 'valhalla_volunteers');
-  $user = user_load($user->uid);
-  $user_party_id = empty($user->field_party[LANGUAGE_NONE][0]['tid']) ? FALSE : $user->field_party[LANGUAGE_NONE][0]['tid'];
-
-  $form = array(
-      'volunteer' => array(
-          'name' => array(
-              '#type' => 'textfield',
-              '#title' => t('Navn'),
-              '#required' => TRUE,
-          ),
-          'cpr' => array(
-              '#type' => 'textfield',
-              '#title' => t('CPR'),
-              '#required' => TRUE,
-              '#description' => t('Skal være 10 tegn, må ikke indeholde "-"'),
-          ),
-          'phone' => array(
-              '#type' => 'textfield',
-              '#title' => t('Telefon'),
-          ),
-          'phone2' => array(
-              '#type' => 'textfield',
-              '#title' => t('Alt. Telefon'),
-          ),
-          'email' => array(
-              '#type' => 'textfield',
-              '#title' => t('E-mail'),
-              '#required' => TRUE,
-          ),
-      ),
-  );
-
-  if ($user_party_id) {
-    $form['volunteer']['party'] = array(
-        '#type' => 'hidden',
-        '#value' => $user_party_id
-    );
-  } else {
-    $taxonomy = taxonomy_vocabulary_machine_name_load('partier');
-
-    $options = array('' => t('Select'));
-    foreach (taxonomy_get_tree($taxonomy->vid) as $term) {
-      $options[$term->tid] = $term->name;
-    }
-
-    $form['volunteer']['party'] = array(
-        '#type' => 'select',
-        '#title' => t('Parti'),
-        '#options' => $options,
-    );
-  }
-
-  $form['volunteer']['roles_id'] = array(
-      '#type' => 'select',
-      '#title' => t('Rolle'),
-      '#options' => _valhalla_helper_get_roles(),
-      '#empty_option' => 'Select',
-  );
-
-  $form['volunteer']['polling_station'] = array(
-      '#type' => 'select',
-      '#title' => t('Ønsket valgsted'),
-      '#options' => _valhalla_helper_get_polling_stations(),
-      '#empty_option' => 'Select',
-  );
-
-  $form['volunteer']['import'] = array(
-      '#type' => 'fieldset',
-      '#title' => t('Importér via CSV'),
-      '#collapsible' => TRUE,
-      '#collapsed' => TRUE,
-  );
-  $form['volunteer']['import']['memo'] = array(
-      '#type' => 'item',
-      '#title' => t('Bemærk:'),
-      '#markup' => 'Filen skal overholde følgende format:<br />"partibogstav";"cprnummer";"fulde navn";"email adresse";"telefonnummer"<br />- første linie i filen skal indeholde denne headerlinie.',
-  );
-  $form['volunteer']['import']['upload'] = array(
-      '#type' => 'file',
-  );
-
-  if (0 && _valhalla_helper_volunteers_count()) {
-    $form['volunteer']['export'] = array(
-        '#type' => 'fieldset',
-        '#title' => t('Eksporér til CSV'),
-        '#collapsible' => TRUE,
-        '#collapsed' => TRUE,
-    );
-    $form['volunteer']['export']['memo'] = array(
-        '#type' => 'item',
-        '#markup' => t('Tryk !link for at få en cvs fil med allerede oprettede tilforordnede.', array('!link' => l('her', 'volunteers/export'))),
-    );
-  }
-
-  $form['#attributes'] = array('enctype' => "multipart/form-data");
-  $form['submit'] = array(
-      '#type' => 'submit',
-      '#value' => t('Add')
-  );
-
-  return $form;
-}
-
-/**
- * validate the "add volunteer" form
- *
- * @param string $form
- * @param array $form_state
- */
-function valhalla_volunteers_add_form_validate($form, &$form_state) {
-  module_load_include('inc', 'valhalla_volunteers', 'valhalla_volunteers');
-
-  // email validation
-  if (!empty($form_state['values']['email']) && !valid_email_address($form_state['values']['email'])) {
-    form_set_error('email', t('E-mail adressen er ikke gyldig.'));
-  }
-  if($form_state['values']['polling_station'] && $form_state['values']['roles_id'] && $form_state['values']['party']){
-    if (!_valhalla_helper_validate_polling_post($form_state['values']['polling_station'], $form_state['values']['roles_id'], $form_state['values']['party'])){
-      drupal_set_message(t('Pladsen er optaget, den tilforordnede er oprettet men ikke tilknyttet nogen plads på valgstedet.'));
-    }
-  }
-
-  // cpr validation
-  if (FALSE == _valhalla_helper_validate_cpr($form_state['values']['cpr'])) {
-    form_set_error('cpr', t('Ugyldigt CPR nummer. Skal være 10 tegn'));
-  }
-
-  if (_valhalla_helper_get_volunteer_by_cpr($form_state['values']['cpr'])) {
-    form_set_error('cpr', t('CPR nummeret er allerede i brug.'));
-  }
-
-  if (!empty($_FILES['files']['name']['upload'])) {
-    $validators = array('file_validate_extensions' => array('csv'));
-    $file = file_save_upload('upload', $validators);
-
-    if (FALSE == $file) {
-      form_set_error('import][upload', t('Filen er ikke en CSV fil,.'));
-    } else {
-      $form_state['file object'] = $file;
-      form_clear_error();
-      drupal_get_messages('error');
-    }
-  }
-}
-
-/**
- * handle submits of the "add volunteer" form
- *
- * @global stdClass $user
- * @global stdClass $language
- * @param string $form
- * @param array $form_state
- */
-function valhalla_volunteers_add_form_submit($form, &$form_state) {
-  global $user, $language;
-
-  if (!empty($form_state['file object'])) {
-    // tth: Import from csv
-    module_load_include('inc', 'valhalla_volunteers', 'valhalla_volunteers');
-
-    $import = _valhalla_helter_parse_csv_import($form_state['file object'], $party);
-    drupal_set_message(t('Oprettet @added frivillige og opdateret @updated andre.', array('@added' => $import['added'], '@updated' => $import['updated'])));
-
-    if ($import['failed']) {
-      $msg = '<p>' . t('Følgende CPR numre er ikke gyldige og er derfor ikke blevet importeret:') . '</p><ul>';
-      foreach ($import['failed'] as $cpr => $name) {
-        $msg .= '<li>' . $name . ' ' . $cpr . '</li>';
-      }
-      $msg .= '</ul>';
-      drupal_set_message($msg, 'error');
-    }
-  } else {
-    // tth: Create a new node and fill fields
-    $node = new stdClass();
-    $node->type = 'volunteers';
-    node_object_prepare($node);
-    $node->comment = 0;
-    $node->title = $form_state['values']['name'];
-    $node->language = $language->language;
-    $node->field_cpr_number[$language->language][0]['value'] = $form_state['values']['cpr'];
-    $node->field_email[$language->language][0]['email'] = $form_state['values']['email'];
-    $node->field_phone[$language->language][0]['value'] = $form_state['values']['phone'];
-    $node->field_phone2[$language->language][0]['value'] = $form_state['values']['phone2'];
-    $node->field_token[$language->language][0]['value'] = user_password(8);
-
-    if (!empty($form_state['values']['polling_station'])) {
-      $node->field_polling_station[$language->language][0]['nid'] = (int) $form_state['values']['polling_station'];
-    }
-
-    if($form_state['values']['roles_id']){
-      // Set the role label (yani : and role id) on the volunteer
-      $roles_array = _valhalla_helper_get_roles();
-      $node->field_label[$language->language][0]['value'] = strtolower($roles_array[$form_state['values']['roles_id']]);
-      $node->field_rolle_id['und'][0]['nid'] = $form_state['values']['roles_id'];
-    }
-
-    $party = FALSE;
-    if (!empty($form_state['values']['party'])) {
-      $node->field_party[$language->language][0]['tid'] = $form_state['values']['party'];
-      $party = $form_state['values']['party'];
-    }
-
-    // tth: Add the volunteer to the polling station right away
-    if($form_state['values']['polling_station'] && $form_state['values']['roles_id'] && $form_state['values']['party']){
-      if (_valhalla_helper_validate_polling_post($form_state['values']['polling_station'], $form_state['values']['roles_id'], $form_state['values']['party'])){
-
-        // tth: Find meeting time
-        $polling_station=node_load($form_state['values']['polling_station']);
-
-        $volunteers_per_party= field_get_items('node', $polling_station, 'field_volunteers_pr_party_1');
-        foreach ($volunteers_per_party as $item) {
-          $field_collection_item=entity_load('field_collection_item', array($item['value']));
-          $party=field_get_items('field_collection_item', $field_collection_item[$item['value']], 'field_party_list');
-
-          $field_name = 'field_role_n'.$form_state['values']['roles_id'];
-          $role = field_get_items('field_collection_item', $field_collection_item[$item['value']], $field_name);
-          if(isset($role[0]['meeting_time']))
-          $meeting_time =  $role[0]['meeting_time'];
-        }
-
-        $node->field_meeting_time['und'][0]['tid'] = $meeting_time;
-
-        // tth: Set polling station post id
-        $station_role_id = $form_state['values']['party'] . $form_state['values']['roles_id'] . $form_state['values']['polling_station'];
-        $node->field_polling_station_post[$language->language][0]['value'] = $station_role_id;
-
-        // tth: Set role
-        //$node->field_rolle_id['und'][0]['nid'] = $form_state['values']['roles_id'];
-      }
-    }
-
-    node_save($node);
-    drupal_set_message(t('Den frivillige "@name" er nu blevet oprettet.', array('@name' => $node->title), array('langcode' => $language->language)));
-  }
-  drupal_goto('volunteers/add');
-}
 
 /**
  * build form for simple user creation
@@ -1062,10 +783,6 @@ function valhalla_volunteers_add_sub_secretary_form_submit($form, array &$form_s
 /**
  * hook_form_FORM_ID_alter() implementation
  *
- * @global stdClass $user
- * @param array $form
- * @param array $form_state
- * @param string $form_id
  */
 function valhalla_volunteers_form_volunteers_node_form_alter(&$form, &$form_state, $form_id) {
   global $user;
@@ -1080,6 +797,112 @@ function valhalla_volunteers_form_volunteers_node_form_alter(&$form, &$form_stat
       $form[$field_name]['#access'] = FALSE;
     }
     $form['buttons']['#access'] = FALSE;
+  }
+
+  // Redid the add volunteer form
+  // Thomas Thune Hansen <tth@bellcom.dk>
+  if(current_path() == 'volunteers/add'){
+    $account = user_load($user->uid);
+    $user_party_id = empty($account->field_party[LANGUAGE_NONE][0]['tid']) ? FALSE : $account->field_party[LANGUAGE_NONE][0]['tid'];
+
+    // Hide these field in this view
+    valhalla_volunteers_field_group_hide_field_groups($form, array('group_adress', 'group_rsvp', 'group_system'));
+    $field_ids = array(
+      'field_diaet',
+      'field_label',
+      'field_polling_station_post',
+      'field_electioninfo',
+    );
+
+    if ($user_party_id) {
+      $field_ids[] = 'field_party';
+    }
+
+    foreach($field_ids as $field_id){
+      hide($form[$field_id]);
+    }
+
+
+    $form['additional_settings']['#prefix'] = '<div style="display:none;">';
+    $form['additional_settings']['#suffix'] = '</div>';
+
+    $form['roles_id'] = array(
+        '#type' => 'select',
+        '#title' => t('Rolle'),
+        '#options' => _valhalla_helper_get_roles(),
+        '#empty_option' => 'Select',
+        '#weight' => 10,
+    );
+
+    $form_state['volunteer_add'] = TRUE;
+  }
+}
+
+
+/**
+ * Implements hook_node_validate
+ */
+function valhalla_volunteers_node_validate($node, $form, &$form_state){
+  global $user;
+
+  // Do some cpr validation
+  $field_language = key($form_state['values']['field_cpr_number']);
+
+  $cpr = $form_state['values']['field_cpr_number'][$field_language][0]['value'];
+  if(_valhalla_helper_get_volunteer_by_cpr($cpr)){
+    form_set_error('field_cpr_number', t('Der er allerede oprettet en frivillig med det CPR-nummer'));
+  }
+
+  if(!_valhalla_helper_validate_cpr($cpr)){
+    form_set_error('field_cpr_number', t('Det indtastede CPR-nummer er ikke korret formateret.'));
+  }
+
+  if($form_state['volunteer_add']){
+    // Set user party id
+    $account = user_load($user->uid);
+    $user_party_id = empty($account->field_party[LANGUAGE_NONE][0]['tid']) ? FALSE : $account->field_party[LANGUAGE_NONE][0]['tid'];
+    $field_language = key($form_state['values']['field_party']);
+    if($user_party_id){
+      $form_state['values']['field_party'][$field_language][0]['tid'] = $user_party_id;
+    }
+
+    // Convert the role chosen, to a label on the volunteer
+    $role_id = '';
+    if(isset($form['roles_id'])){
+      $field_language = key($form_state['values']['field_cpr_number']);
+
+      $role_id = $form_state['values']['roles_id'];
+
+      $roles_array = _valhalla_helper_get_roles();
+      $form_state['values']['field_label'][$field_language][0]['value'] = strtolower($roles_array[$role_id]);
+    }
+
+    //
+    // If the values set, polling_station, party_id and role match with an empty
+    // polling station post we assign it right away.
+    //
+    if(variable_get('valghalla_assing_post_on_node_add', TRUE)){
+      $polling_station = '';
+      $field_language = key($form_state['values']['field_polling_station']);
+      if(!empty($form_state['values']['field_polling_station'][$field_language][0]['nid'])){
+        $polling_station = $form_state['values']['field_polling_station'][$field_language][0]['nid'];
+      }
+
+      if(form_get_errors()){
+        return;
+      }
+
+      if (_valhalla_helper_validate_polling_post($polling_station, $role_id, $user_party_id)){
+        $station_role_id = $user_party_id . $role_id . $polling_station;
+
+        $field_language = key($form_state['values']['field_polling_station_post']);
+        $form_state['values']['field_polling_station_post'][$field_language][]['value'] = $station_role_id;
+        drupal_set_message(t('Deltageren er blevet tildelt en plads på valgte valgsted/parti/rolle'));
+      }
+      else {
+        drupal_set_message(t('Deltageren er ikke blevet tildelt en plads på et valgsted'), 'warning');
+      }
+    }
   }
 }
 
@@ -1247,6 +1070,27 @@ function valhalla_volunteers_views_pre_render(&$view){
       // already a post.
       if($query){
         unset($view->result[$key]);
+      }
+    }
+  }
+}
+
+/**
+ * Hides field groups including children in a render array.
+ *
+ * @param array $element
+ *   A render array. Can be a form, node, user, ...
+ * @param array $group_names
+ *   An array of field group names that should be hidden.
+ */
+function valhalla_volunteers_field_group_hide_field_groups(&$element, $group_names) {
+  foreach ($group_names as $group_name) {
+    if (isset($element['#fieldgroups'][$group_name]) && isset($element['#group_children'])) {
+      // Hide the field group.
+      $element['#fieldgroups'][$group_name]->format_type = 'hidden';
+      // Hide the elements inside the field group.
+      foreach (array_keys($element['#group_children'], $group_name) as $field_name) {
+        $element[$field_name]['#access'] = FALSE;
       }
     }
   }
